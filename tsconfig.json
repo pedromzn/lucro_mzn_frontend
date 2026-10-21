@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": false,
+    "noFallthroughCasesInSwitch": true,
+    // Sem `baseUrl`: ele foi depreciado no TypeScript 6 e para de funcionar no 7.
+    // Desde o TS 4.1 o `paths` dispensa ele — os caminhos abaixo são resolvidos
+    // a partir da pasta DESTE arquivo, que é o que o `baseUrl: "."` fazia.
+    // Quem resolve os mesmos apelidos em tempo de execução é o `vite.config.ts`,
+    "paths": {
+      "@shared/*": ["./shared/*"],
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src", "shared"]
+}

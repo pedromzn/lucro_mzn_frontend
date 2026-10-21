@@ -1,0 +1,6 @@
+node_modules
+dist
+# o `.env` local e tudo que começa com ele (a regra dos outros repositórios)
+.env
+.env.*
+!.env.example

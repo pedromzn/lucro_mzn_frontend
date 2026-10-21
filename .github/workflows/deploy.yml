@@ -1,0 +1,120 @@
+# CI e deploy do painel do Lucro Certo — o MESMO workflow do painel do MKT
+# (`mzn_mkt/frontend/.github/workflows/deploy.yml`), com o front `lucro`.
+#
+# O painel é servido pelo nginx da EC2 em lucro.mzndigital.com.br
+# (`mzn_infra/fronts/`). Dois trabalhos, e a divisão é a do backend:
+#
+#   ci      no runner do GitHub, descartável: instala, audita, testa, constrói
+#           e empacota (build + cabeçalhos + manifesto sha256).
+#   deploy  no runner que vive na instância, como o usuário `mzn-fronts` — SEM
+#           sudo, sem leitura dos .env. Só baixa o pacote e chama o
+#           `mzn-publicar-front`, que confere, troca o link e roda a fumaça.
+#
+# Nada se constrói na instância (2 GB de RAM, e é a máquina que atende o
+# cliente), e nenhum segredo mora aqui: o build não precisa de nenhum, e o
+# runner busca trabalho por HTTPS de saída — a porta 22 segue só com o IP do
+# Pedro.
+#
+# ⚠ NUNCA acrescente gatilho de `pull_request` (nem `pull_request_target`):
+# o job de deploy roda DENTRO da instância, e um PR executaria código de quem
+# o abriu lá dentro.
+#
+# As ações são fixadas por SHA, não por tag: uma tag se move, e o que roda com
+# acesso ao runner da instância não pode mudar sem um commit aqui.
+
+name: CI e deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Deploys não se atropelam, e um no meio não é abandonado pelo seguinte.
+concurrency:
+  group: deploy-lucro-painel
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    name: Conferir e construir
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # a mesma versão da instância e do backend
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Instalar
+        run: npm ci
+
+      # O mesmo corte do backend: alta ou crítica reprova.
+      - name: Auditoria de dependências
+        run: npm audit --audit-level=high
+
+      # O `pretest` roda o shared:sync, que sai calado aqui (o backend não foi
+      # clonado): vale o espelho commitado em shared/. Leia o rodapé inteiro se
+      # isto falhar — "Test Files" é o número que cai quando um import quebra.
+      - name: Testes
+        run: npm test
+
+      # typecheck + vite. O vite.config RECUSA construir sem VITE_LOJA_URL — e
+      # é uma variável do repositório (Settings → Variables), não um segredo:
+      # tudo VITE_* vai para o navegador.
+      - name: Build
+        run: npm run build
+        env:
+          VITE_LOJA_URL: ${{ vars.VITE_LOJA_URL }}
+
+      # O pacote que a instância confere arquivo por arquivo. Os .gz saem
+      # prontos (o nginx usa gzip_static); -n tira o nome e a data do .gz, para
+      # o mesmo build dar o mesmo arquivo.
+      - name: Empacotar
+        run: |
+          find dist -type f \( -name '*.js' -o -name '*.css' -o -name '*.html' -o -name '*.svg' -o -name '*.json' -o -name '*.txt' \) \
+            -size +1k -exec gzip -k -9 -n {} \;
+          mkdir pacote
+          cp -a dist pacote/dist
+          cp infra/cabecalhos.conf pacote/cabecalhos.conf
+          cd pacote
+          find . -type f ! -name MANIFESTO.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > MANIFESTO.sha256
+          echo "$(wc -l < MANIFESTO.sha256) arquivos, $(du -sh . | cut -f1)"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lucro-${{ github.sha }}
+          path: pacote/
+          retention-days: 7
+          if-no-files-found: error
+
+  deploy:
+    name: Publicar na instância
+    needs: ci
+    # O workflow_dispatch deixa escolher o branch; só a main chega à instância.
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, mzn-fronts]
+    timeout-minutes: 10
+
+    steps:
+      # o download confere o digest do artefato (padrão desde a v8)
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: lucro-${{ github.sha }}
+          path: ${{ runner.temp }}/pacote
+
+      - name: mzn-publicar-front
+        run: /usr/local/bin/mzn-publicar-front lucro "$RUNNER_TEMP/pacote" "$GITHUB_SHA"
+
+      # o pacote não fica no disco do runner
+      - name: Limpar
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/pacote"

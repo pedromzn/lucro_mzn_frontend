@@ -1,0 +1,3 @@
+/* O Lucro Certo usa o visual do mock — o porquê está no topo de `styles/lucro.css`. */
+@import "tailwindcss";
+@import "./styles/lucro.css";
