@@ -12,7 +12,8 @@
 
 import type { Calculo, Premissas } from '@shared/preco'
 import type { DadosDoCanal, Preferencias } from '@shared/contratos'
-import type { LayoutDeEtiqueta } from '@shared/etiquetas'
+import type { LayoutDeEtiqueta, EstiloDeEtiqueta } from '@shared/etiquetas'
+import type { Ambiente, DadosDaEstrutura, Endereco, Estrutura, PedidoDeTransferencia, Sugestao, Tarefa, Tema } from '@shared/enderecos'
 import { cabecalhosDeSessao, encerrarSessaoPorToken } from './sessao'
 import type { RetratoDaSessao } from './sessao'
 
@@ -24,10 +25,12 @@ export class ErroDaApi extends Error {
 
 /**
  * Os 402 que significam "precisa assinar ou regularizar" — vão para a página DESTE
- * app na loja. `sem_assento` fica de fora: é problema do administrador
- * (liberar uma licença), e a mensagem dele explica o que fazer.
+ * app na loja. Dois ficam de fora: `sem_assento`, que é problema do
+ * administrador (liberar uma licença, e a mensagem dele explica o que fazer), e
+ * `app_nao_contratado` (22/10/2026), porque no primeiro acesso o painel começa a
+ * avaliação sozinho (`painel.ts`) em vez de mandar à loja.
  */
-const CODIGOS_DE_ASSINATURA = new Set(['trial_expirado', 'assinatura_vencida', 'app_nao_contratado', 'app_pausado'])
+const CODIGOS_DE_ASSINATURA = new Set(['trial_expirado', 'assinatura_vencida', 'app_pausado'])
 
 async function pedir(path: string, options: RequestInit = {}): Promise<Response> {
   const resposta = await fetch(`/api${path}`, {
@@ -443,6 +446,8 @@ export interface Movimento {
   produto: string
   unidade: string
   statusDaVenda: 'concluida' | 'devolvida' | null
+  /** as linhas de endereço: de onde saiu (negativo) e para onde foi (positivo) */
+  enderecos: Array<{ rotulo: string; quantidade: string }>
 }
 
 export interface TelaDoEstoque {
@@ -465,6 +470,55 @@ export interface PedidoDeMovimento {
   canalId?: string | null
   formaDePagamento?: 'Pix' | 'Cartão' | 'Dinheiro' | 'Boleto' | 'Outro'
   motivo?: string
+  /** destino da entrada, origem da saída, posição contada na conferência (PLANO-ESTOQUE-3D.md) */
+  endereco?: Endereco | null
+}
+
+/* ── o estoque com endereço (PLANO-ESTOQUE-3D.md) ── */
+
+export interface ProdutoNoMapa {
+  id: string
+  nome: string
+  sku: string | null
+  categoria: string
+  unidade: string
+  imagemId: string | null
+  arquivado: boolean
+  quantidade: string
+  aGuardar: string
+  minimo: string
+  revisao: number
+  valorEmEstoque: string
+  custoMedio: string
+  preco: string
+  vendidos30d: string
+  /** `null` é "nunca movimentou" */
+  diasParado: number | null
+}
+
+export interface PosicaoNoMapa extends Endereco {
+  produtoId: string
+  quantidade: string
+}
+
+export interface MovimentoNoMapa {
+  id: string
+  tipo: string
+  produtoId: string
+  quantidade: string
+  criadoEm: string
+  linhas: Array<Endereco & { quantidade: string; rotulo: string }>
+}
+
+export interface MapaDoEstoque {
+  ambiente: (Ambiente & { revisao: number }) | null
+  temas: Array<{ tema: Tema; nome: string; descricao: string }>
+  estruturas: Estrutura[]
+  posicoes: PosicaoNoMapa[]
+  produtos: ProdutoNoMapa[]
+  produtosTruncados: boolean
+  movimentos: MovimentoNoMapa[]
+  tarefas: Tarefa[]
 }
 
 export interface DetalheDaVenda {
@@ -487,9 +541,21 @@ export interface ModeloDeEtiqueta {
   deFabrica: boolean
 }
 
+/** o teto de uma foto ou logo — o mesmo do servidor (`arquivos/service.ts`), conferido aqui para não mandar 1 MB e ouvir "não" */
+export const TAMANHO_MAXIMO_DA_IMAGEM = 1_000_000
+
+export interface LogoDaEmpresa {
+  id: string
+  mime: string
+  tamanho: number
+  criadoEm: string
+}
+
 export interface PedidoDeEtiquetas {
   chaveDaOperacao: string
   modeloId: string
+  /** o desenho da etiqueta — o papel é o `modeloId` */
+  estilo: EstiloDeEtiqueta
   itens: Array<{ produtoId: string; copias: number }>
   posicaoInicial: number
   deslocamentoX: number
@@ -500,11 +566,15 @@ export interface PedidoDeEtiquetas {
 
 export const lucroApi = {
   estado: () => request<Estado>('/estado'),
+  /** os 15 dias do Lucro Certo, no primeiro acesso de quem já é cliente de outro app (só gestor) */
+  comecarAvaliacao: () => request<unknown>('/nucleo/billing/avaliar-no-painel', { method: 'POST' }),
   preferencias: (dados: Preferencias) => request<Preferencias>('/preferencias', json(dados, 'PUT')),
 
   criarProduto: (p: ProdutoParaGravar) => request<Produto>('/produtos', json(p)),
   salvarProduto: (p: ProdutoParaGravar & { id: string; revisao: number }) => request<Produto>(`/produtos/${p.id}`, json(p, 'PUT')),
   acaoNoProduto: (id: string, acao: 'duplicar' | 'arquivar' | 'restaurar' | 'favorito') => request<Produto>(`/produtos/${id}/${acao}`, { method: 'POST' }),
+  /** só o arquivado que nunca movimentou estoque nem vendeu; o servidor diz a razão quando recusa */
+  excluirProduto: (id: string) => request<{ ok: true }>(`/produtos/${id}`, { method: 'DELETE' }),
   historico: (id: string) => request<Revisao[]>(`/produtos/${id}/historico`),
   adicionarExemplos: () => request<{ quantidade: number }>('/produtos/exemplos', { method: 'POST' }),
 
@@ -532,10 +602,28 @@ export const lucroApi = {
   definirMinimo: (produtoId: string, minimo: string) => request<void>('/estoque/minimo', json({ produtoId, minimo }, 'PUT')),
   venda: (id: string) => request<DetalheDaVenda>(`/estoque/vendas/${id}`),
 
-  etiquetas: () => request<{ modelos: ModeloDeEtiqueta[]; geradas: Array<{ id: string; quantidade: number; criadoEm: string }> }>('/etiquetas'),
+  mapaDoEstoque: () => request<MapaDoEstoque>('/estoque/mapa'),
+  sugestoesDeGuarda: (produtoId: string) => request<Sugestao[]>(`/estoque/sugestoes/${encodeURIComponent(produtoId)}`),
+  transferir: (t: PedidoDeTransferencia) => request<{ id: string; repetida: boolean }>('/estoque/transferencias', json(t)),
+  montarEspaco: (tema: Tema, substituir = false) => request<{ ambienteId: string }>('/estoque/ambiente', json({ tema, substituir })),
+  alterarEspaco: (dados: Partial<Ambiente>) => request<void>('/estoque/ambiente', json(dados, 'PUT')),
+  criarEstrutura: (e: DadosDaEstrutura) => request<Estrutura>('/estoque/estruturas', json(e)),
+  alterarEstrutura: (id: string, e: Partial<DadosDaEstrutura>) => request<Estrutura>(`/estoque/estruturas/${encodeURIComponent(id)}`, json(e, 'PUT')),
+  retirarEstrutura: (id: string) => request<void>(`/estoque/estruturas/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  etiquetas: () => request<{ modelos: ModeloDeEtiqueta[] }>('/etiquetas'),
   salvarModeloDeEtiqueta: (m: { nome: string; layout: LayoutDeEtiqueta; anteriorId?: string }) =>
     request<{ id: string; versao: number }>('/etiquetas/modelos', json(m)),
   gerarEtiquetas: (p: PedidoDeEtiquetas) => arquivo('/etiquetas/pdf', json(p)),
+
+  /** os logos da EMPRESA (até dois), cadastrados em Sua empresa e escolhidos nas etiquetas */
+  logos: () => request<{ logos: LogoDaEmpresa[]; maximo: number }>('/logos'),
+  enviarLogo: (arquivoDoLogo: File) => {
+    const dados = new FormData()
+    dados.append('arquivo', arquivoDoLogo)
+    return request<{ id: string }>('/logos', { method: 'POST', body: dados })
+  },
+  apagarLogo: (id: string) => request<{ ok: true }>(`/logos/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   enviarImagem: (arquivoDaImagem: File) => {
     const dados = new FormData()
@@ -550,5 +638,4 @@ export const enderecos = {
   exportar: (formato: 'csv' | 'xlsx' | 'pdf' | 'json') => `/exportar?formato=${formato}`,
   modeloDeImportacao: '/importacao/modelo',
   estoqueEmCsv: '/estoque/exportar',
-  segundaVia: (id: string) => `/etiquetas/${encodeURIComponent(id)}/pdf`,
 }

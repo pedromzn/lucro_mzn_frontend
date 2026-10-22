@@ -6,26 +6,27 @@
  *   empresa); as preferências são deste app e desta pessoa;
  * - **Assinatura**: a situação vem do Núcleo, e assinar ou mudar é na loja —
  *   faturas e notas também moram lá, como no MKT;
- * - **Segurança**: a senha e o MFA são os da suíte. O mock listava as sessões;
- *   aqui sair encerra a sessão em TODOS os aparelhos (AGENTS.md §6);
+ * - **Segurança**: a senha, o MFA e as sessões abertas são os da suíte. Desde
+ *   22/10/2026 cada sessão aparece e se encerra sozinha (`SessoesAbertas`), e
+ *   sair encerra só a deste aparelho;
  * - **Privacidade e Suporte**: o mock tinha chamados dentro do app; aqui é o
  *   e-mail da MZN, que atende todos os aplicativos.
  */
 
-import { BaixarArquivo } from '@/components/ArquivosDoEspaco'
 import { useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Download, KeyRound, LifeBuoy, LogOut, ShieldCheck, Trash2 } from 'lucide-react'
+import { ExternalLink, KeyRound, LifeBuoy, ShieldCheck, Trash2 } from 'lucide-react'
 import { REGIMES_TRIBUTARIOS } from '@shared/contratos'
 import { EMAIL_DO_SUPORTE } from '@shared/ajuda'
 import { autenticacao, useSessao } from '@/lib/sessao'
-import { URL_DA_LOJA, enderecos, lucroApi } from '@/lib/api'
+import { URL_DA_LOJA, lucroApi } from '@/lib/api'
 import { agir, usePainel } from '@/lib/painel'
 import { toast } from '@/lib/avisos'
 import { useAssinatura } from '@/loja/estadoDaAssinatura'
 import { LINKS_LEGAIS } from '@/acesso/CaixaDosTermos'
 import { MfaSecao } from '@/conta/MfaSecao'
-import { Aviso, Botao, CampoDeTexto, Selecao, Selo, data } from '@/components/ui'
+import { SessoesAbertas } from '@/conta/SessoesAbertas'
+import { Aviso, Botao, CampoDeTexto, Selecao, Selo, data, Combo } from '@/components/ui'
 import { ForcaDaSenha } from './DefinirSenha'
 
 const ABAS = [['perfil', 'Perfil e negócio'], ['assinatura', 'Assinatura'], ['seguranca', 'Segurança'], ['privacidade', 'Privacidade'], ['suporte', 'Suporte']] as const
@@ -48,7 +49,7 @@ export default function MinhaConta() {
         {aba === 'perfil' ? <Perfil /> : null}
         {aba === 'assinatura' ? <Assinatura /> : null}
         {aba === 'seguranca' ? <Seguranca /> : null}
-        {aba === 'privacidade' ? <Privacidade aoPedir={() => irPara('suporte')} /> : null}
+        {aba === 'privacidade' ? <Privacidade /> : null}
         {aba === 'suporte' ? <Suporte /> : null}
       </div>
     </>
@@ -86,7 +87,7 @@ function Perfil() {
               opcoes={REGIMES_TRIBUTARIOS}
               dica="Este campo não preenche alíquotas automaticamente. Você pode simular com a alíquota efetiva informada pelo seu contador."
             />
-            <Selecao
+            <Combo
               rotulo="Canal favorito"
               valor={estado.preferencias.canalFavorito ?? ''}
               aoMudar={(v) => preferir({ canalFavorito: v })}
@@ -138,7 +139,6 @@ function Assinatura() {
 }
 
 function Seguranca() {
-  const sair = useSessao((s) => s.sair)
   const [atual, setAtual] = useState('')
   const [nova, setNova] = useState('')
   const [confirmacao, setConfirmacao] = useState('')
@@ -174,37 +174,32 @@ function Seguranca() {
         </form>
       </section>
       <MfaSecao />
-      <section className="panel section-gap between">
-        <div>
-          <h2>Dispositivos e sessões</h2>
-          <p className="muted small">Sair encerra a sua sessão em todos os aparelhos, neste e nos outros aplicativos da MZN.</p>
-        </div>
-        <Botao variante="fantasma" onClick={async () => { try { await sair(); location.href = '/entrar' } catch (erro) { toast.error(erro instanceof Error ? erro.message : 'Não foi possível encerrar as sessões. Tente novamente.') } }}><LogOut size={16} />Sair de todos os aparelhos</Botao>
-      </section>
+      <SessoesAbertas />
     </>
   )
 }
 
-function Privacidade({ aoPedir }: { aoPedir: () => void }) {
+/*
+ * A privacidade mora no site da MZN (22/10/2026, pedido do Pedro): o Aviso de
+ * Privacidade e os pedidos do titular saem de lá, iguais para todos os apps.
+ * Aqui fica só o caminho até ele e a exclusão da conta.
+ */
+function Privacidade() {
   const assunto = encodeURIComponent('[LucroCerto] Exclusão da minha conta')
   return (
     <section className="panel">
       <h2>Seus dados pertencem a você.</h2>
-      <p className="muted">Exporte seus registros ou solicite esclarecimentos sobre o tratamento dos seus dados.</p>
+      <p className="muted">Como a MZN trata os seus dados, por quanto tempo os guarda e como pedir acesso, correção ou exclusão está no Aviso de Privacidade, no site.</p>
       <div className="actions section-gap">
-        <BaixarArquivo className="btn secondary"  caminho={enderecos.exportar('json')}><Download size={16} />Baixar meus dados</BaixarArquivo>
-        <Botao variante="fantasma" onClick={aoPedir}>Solicitação de privacidade</Botao>
+        <a className="btn secondary" href={LINKS_LEGAIS.privacidade} target="_blank" rel="noopener noreferrer"><ExternalLink size={16} />Ver o Aviso de Privacidade</a>
       </div>
       <hr />
       <h3>Excluir minha conta</h3>
       <p>
         A conta é da MZN e vale para todos os aplicativos da sua empresa. Para excluí-la, escreva para o nosso contato a partir do e-mail
-        da conta: conferimos o pedido e apagamos os dados conforme o Aviso de Privacidade. Faça uma exportação antes.
+        da conta: conferimos o pedido e apagamos os dados conforme o Aviso de Privacidade.
       </p>
       <a className="btn danger" href={`mailto:${EMAIL_DO_SUPORTE}?subject=${assunto}`}><Trash2 size={16} />Pedir a exclusão da conta</a>
-      <p className="small muted section-gap">
-        Consulte o <a href={LINKS_LEGAIS.privacidade} target="_blank" rel="noopener noreferrer">Aviso de Privacidade</a> e os critérios de retenção.
-      </p>
     </section>
   )
 }

@@ -1,7 +1,9 @@
 /**
- * A casca do Lucro Certo — o `Workspace` do mock (`LucroCerto/components/workspace.tsx`):
- * barra lateral, topo, título da página, dica e rodapé, com a marcação e as
- * classes de lá. O que mudou foi o que está por trás:
+ * A casca do Lucro Certo: barra lateral, topo, título da página, dica e rodapé.
+ * Nasceu do `Workspace` do mock e, desde 22/10/2026 (pedido do Pedro), veste o
+ * padrão do Marketing Flow — cores, topo branco, selo da assinatura, o cartão
+ * de Configurações —, menos a barra de baixo: aqui a navegação segue LATERAL.
+ * O que mudou em relação ao mock é o que está por trás:
  *
  * - as abas são ROTAS (`/produtos`, `/estoque`...) em vez de `?tab=`: o voltar
  *   do navegador e o link copiado funcionam sem código próprio. Os itens do
@@ -13,11 +15,11 @@
  *   a loja (`lib/api.ts`). O portão de compra do mock não existe aqui.
  */
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
-  ArrowUpRight, Boxes, Building2, Calculator, ChartNoAxesCombined, ChevronRight, GitCompareArrows, LayoutDashboard,
-  LifeBuoy, LogOut, Menu, Package, Percent, Plus, Settings2, SlidersHorizontal, Tags, User, X,
+  ArrowUpRight, Boxes, Building2, Calculator, ChartNoAxesCombined, ChevronRight, ChevronUp, GitCompareArrows, LayoutDashboard,
+  LifeBuoy, LogOut, Menu, Package, Percent, Plus, Settings, Settings2, SlidersHorizontal, Tags, User, X,
 } from 'lucide-react'
 import { useSessao } from '@/lib/sessao'
 import { usePainel } from '@/lib/painel'
@@ -58,7 +60,7 @@ const TITULOS: Record<string, [string, string, string]> = {
   '/etiquetas': ['Etiquetas', 'Do catálogo para a etiqueta.', 'Escolha os produtos, personalize e gere seu PDF.'],
   '/relatorios': ['Relatórios', 'Os números que orientam.', 'Enxergue a rentabilidade estimada do seu catálogo.'],
   '/conta': ['Minha conta', 'Sua conta. Seu controle.', 'Perfil, assinatura, segurança e privacidade.'],
-  '/empresa': ['Sua empresa', 'Sua equipe, organizada.', 'Dados da empresa, pessoas com acesso e espaços de trabalho.'],
+  '/empresa': ['Sua empresa', 'Sua equipe, organizada.', 'Dados da empresa, pessoas com acesso, espaços de trabalho e logos.'],
   '/ajuda': ['Ajuda', 'Sua central de clareza.', 'Respostas práticas para usar o LucroCerto.'],
 }
 
@@ -68,6 +70,13 @@ const TITULOS: Record<string, [string, string, string]> = {
  * telas de conta do MKT. As outras pedem `/api/estado`, e o 402 leva à loja.
  */
 const SEM_CATALOGO = ['/conta', '/empresa', '/ajuda']
+
+/* o que mora em Configurações: no MKT é o cartão da barra de cima; aqui abre ao lado do item da barra lateral */
+const CONFIGURACOES = [
+  { para: '/ajuda', rotulo: 'Central de ajuda', descricao: 'Respostas práticas para usar o LucroCerto.', Icone: LifeBuoy, soGestor: false },
+  { para: '/conta', rotulo: 'Minha conta', descricao: 'Perfil, assinatura, segurança e privacidade.', Icone: User, soGestor: false },
+  { para: '/empresa', rotulo: 'Sua empresa', descricao: 'Dados, pessoas com acesso, espaços de trabalho e logos.', Icone: Building2, soGestor: true },
+]
 const SEM_BOTAO_DE_PRECIFICAR = ['/precificar', '/conta', '/empresa', '/ajuda']
 
 /** `/precificar/prd_x` é Precificar; `/empresa/usuarios` é Sua empresa */
@@ -95,6 +104,13 @@ export function Casca({ children }: { children: ReactNode }) {
     window.scrollTo({ top: 0, behavior: 'instant' })
   }, [pathname])
 
+  /* aceitou os termos com o painel parado no erro (o primeiro acesso esperava por eles): tenta de novo sozinho */
+  const termosPendentes = retrato?.termosPendentes?.length ?? 0
+  /* só reage à mudança dos termos, de propósito: com `erro` nas dependências, cada falha de rede recarregaria em laço */
+  useEffect(() => {
+    if (erro && termosPendentes === 0 && precisaDoCatalogo) void recarregar()
+  }, [termosPendentes])
+
   if (!retrato) return null
   const primeiroNome = retrato.usuario.nome.split(' ')[0]
   const statusDaAssinatura = !situacao ? '' : situacao.status === 'trial' ? 'Em avaliação' : situacao.ativa ? 'Assinatura ativa' : 'Assinatura vencida'
@@ -107,6 +123,8 @@ export function Casca({ children }: { children: ReactNode }) {
           <>
             <Aviso tipo="erro">{erro}</Aviso>
             <Botao onClick={() => void recarregar()}>Tentar novamente</Botao>
+            {/* o primeiro acesso pode estar esperando o aceite: sem a janela aqui, ela nunca abriria */}
+            <JanelaDosTermos />
           </>
         ) : (
           <>
@@ -147,16 +165,7 @@ export function Casca({ children }: { children: ReactNode }) {
           })}
         </nav>
         <div className="sidebar-bottom">
-          <div className="sidebar-note">
-            <span className="mini-line" />
-            <strong>Preço certo.<br />Decisão consciente.</strong>
-            <small>Feito para quem empreende.</small>
-          </div>
-          <nav aria-label="Conta e ajuda">
-            <button className={raiz === '/ajuda' ? 'active' : ''} onClick={() => navegar('/ajuda')}><LifeBuoy size={18} />Central de ajuda</button>
-            <button className={raiz === '/conta' ? 'active' : ''} onClick={() => navegar('/conta')}><User size={18} />Minha conta</button>
-            {ehGestor() ? <button className={raiz === '/empresa' ? 'active' : ''} onClick={() => navegar('/empresa')}><Building2 size={18} />Sua empresa</button> : null}
-          </nav>
+          <MenuDeConfiguracoes raiz={raiz} itens={CONFIGURACOES.filter((c) => !c.soGestor || ehGestor())} aoIr={navegar} />
           <div className="sidebar-user">
             <span className="avatar">{retrato.usuario.nome.slice(0, 1)}</span>
             <div><strong>{primeiroNome}</strong><small>{statusDaAssinatura}</small></div>
@@ -170,9 +179,13 @@ export function Casca({ children }: { children: ReactNode }) {
       <div className="app-body">
         <header className="topbar">
           <button className="mobile-menu icon-button" aria-label="Abrir menu" onClick={() => setMenuMovel(true)}><Menu size={21} /></button>
-          <div className="breadcrumb"><span>Meu negócio</span><ChevronRight size={13} /><strong>{titulo[0]}</strong></div>
+          <div className="breadcrumb"><span>{SEM_CATALOGO.includes(raiz) ? 'Configurações' : 'Seu negócio'}</span><ChevronRight size={13} /><strong>{titulo[0]}</strong></div>
           <div className="topbar-right">
-            <span className="save-indicator"><i />Dados salvos na sua conta</span>
+            {statusDaAssinatura ? (
+              <Link className="topbar-seal" data-tom={situacao && situacao.status !== 'trial' && !situacao.ativa ? 'perigo' : undefined} to="/conta" title="Ver a assinatura em Minha conta">
+                <i />{statusDaAssinatura}
+              </Link>
+            ) : null}
             <a href={LINKS_LEGAIS.site} title="Ver o site da MZN" className="icon-button" aria-label="Ver o site da MZN" target="_blank" rel="noopener noreferrer">
               <ArrowUpRight size={17} />
             </a>
@@ -181,10 +194,10 @@ export function Casca({ children }: { children: ReactNode }) {
         </header>
         <main id="main-content" className="main-content">
           <div className="page-heading">
+            {/* como no MKT: o título é o nome da tela; a frase do mock ficou no subtítulo */}
             <div>
-              <span className="page-overline">LUCROCERTO / {raiz === '/' ? 'VISÃO GERAL' : 'SEU NEGÓCIO'}</span>
-              <h1>{titulo[1]}</h1>
-              <p>{titulo[2]}</p>
+              <h1>{titulo[0]}</h1>
+              <p>{titulo[1]} {titulo[2]}</p>
             </div>
             {!SEM_BOTAO_DE_PRECIFICAR.includes(raiz) && estado?.podeEscrever ? (
               <Botao onClick={() => navegar('/precificar')}><Plus size={17} />Precificar produto</Botao>
@@ -235,6 +248,63 @@ export function Casca({ children }: { children: ReactNode }) {
         </div>
       </Janela>
     </div>
+  )
+}
+
+/**
+ * Configurações, na barra lateral: o cartão abre ao lado do item, preso a
+ * ele (posição fixa, porque a barra rola e cortaria um cartão absoluto). No
+ * celular a barra é uma gaveta estreita, e o cartão vira uma lista dentro dela.
+ */
+function MenuDeConfiguracoes({ raiz, itens, aoIr }: {
+  raiz: string
+  itens: typeof CONFIGURACOES
+  aoIr: (para: string) => void
+}) {
+  const [aberto, setAberto] = useState(false)
+  const [lugar, setLugar] = useState<{ left: number; bottom: number } | null>(null)
+  const botao = useRef<HTMLButtonElement>(null)
+  const cartao = useRef<HTMLDivElement>(null)
+  const ativo = itens.some((i) => i.para === raiz)
+
+  useEffect(() => { setAberto(false) }, [raiz])
+  useEffect(() => {
+    if (!aberto) return
+    const fora = (e: PointerEvent) => {
+      const alvo = e.target as Node
+      if (!botao.current?.contains(alvo) && !cartao.current?.contains(alvo)) setAberto(false)
+    }
+    const tecla = (e: KeyboardEvent) => { if (e.key === 'Escape') { setAberto(false); botao.current?.focus() } }
+    document.addEventListener('pointerdown', fora)
+    document.addEventListener('keydown', tecla)
+    return () => { document.removeEventListener('pointerdown', fora); document.removeEventListener('keydown', tecla) }
+  }, [aberto])
+
+  const alternar = () => {
+    const r = botao.current?.getBoundingClientRect()
+    /* a borda é a da BARRA, não a do botão: o cartão encosta nela, sem cobrir o item */
+    const barra = botao.current?.closest('.sidebar')?.getBoundingClientRect()
+    if (r) setLugar({ left: (barra?.right ?? r.right) + 12, bottom: Math.max(12, window.innerHeight - r.bottom) })
+    setAberto(!aberto)
+  }
+
+  return (
+    <nav aria-label="Configurações" className="settings-nav">
+      <button ref={botao} className={ativo ? 'active' : ''} aria-expanded={aberto} aria-haspopup="true" onClick={alternar}>
+        <Settings size={18} />Configurações<ChevronUp size={15} className={`settings-arrow${aberto ? ' open' : ''}`} />
+      </button>
+      {aberto ? (
+        <div ref={cartao} className="settings-card" style={lugar ?? undefined}>
+          <p>Configurações</p>
+          {itens.map(({ para, rotulo, descricao, Icone }) => (
+            <button key={para} aria-current={raiz === para ? 'page' : undefined} onClick={() => aoIr(para)}>
+              <Icone size={18} />
+              <span><strong>{rotulo}</strong><small>{descricao}</small></span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </nav>
   )
 }
 

@@ -1,7 +1,8 @@
 /**
  * Produtos — o catálogo do mock (`catalog.tsx`), com a mesma marcação: busca,
  * filtros salvos, tabela ou cartões, seleção, lote, importação, exportação e
- * histórico.
+ * histórico. Editar abre a janela de edição rápida (`EditarProduto`), e o
+ * arquivado sem movimento nem venda pode ser apagado de vez.
  *
  * Lote e importação são em DOIS tempos, como no mock: a prévia é calculada e
  * guardada no servidor, e confirmar aplica exatamente aquela prévia (pelo id
@@ -12,12 +13,13 @@ import { BaixarArquivo, ImagemDoEspaco } from '@/components/ArquivosDoEspaco'
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
-  Archive, ArrowRight, Check, Copy, Download, History, LayoutGrid, List, Package, Plus, RotateCcw, Search, SlidersHorizontal, Star, Upload,
+  Archive, ArrowRight, Check, Copy, Download, History, LayoutGrid, List, Package, Pencil, Plus, RotateCcw, Search, SlidersHorizontal, Star, Tag, Trash2, Upload,
 } from 'lucide-react'
 import { enderecos, lucroApi, type Previa, type Produto, type RegraDoLote, type Revisao } from '@/lib/api'
 import { agir, usePainel } from '@/lib/painel'
 import { toast } from '@/lib/avisos'
-import { Aviso, Botao, CampoDeTexto, CampoNumero, Janela, Selecao, Selo, Vazio, brl, data, erroDe, pct } from '@/components/ui'
+import { Aviso, Botao, CampoDeTexto, CampoNumero, Janela, Selecao, Selo, Vazio, brl, data, erroDe, pct, Combo } from '@/components/ui'
+import { EditarProduto } from '@/components/EditarProduto'
 import { avaliacaoDe, useEditarProduto } from './Inicio'
 
 const POR_PAGINA = 12
@@ -55,6 +57,8 @@ export default function Produtos() {
   const [arquivo, setArquivo] = useState<File | null>(null)
   const [ultimoLote, setUltimoLote] = useState<string | null>(null)
   const [arquivando, setArquivando] = useState<Produto | null>(null)
+  const [editando, setEditando] = useState<Produto | null>(null)
+  const [apagando, setApagando] = useState<Produto | null>(null)
   const [pagina, setPagina] = useState(1)
   const escreve = estado.podeEscrever
 
@@ -151,7 +155,7 @@ export default function Produtos() {
 
       <div className="filter-row">
         <Selecao rotulo="Status" valor={status} aoMudar={setStatus} opcoes={[{ valor: 'ativo', rotulo: 'Ativos' }, { valor: 'arquivado', rotulo: 'Arquivados' }, { valor: 'todos', rotulo: 'Todos' }]} />
-        <Selecao
+        <Combo
           rotulo="Categoria"
           valor={categoria}
           aoMudar={setCategoria}
@@ -163,14 +167,15 @@ export default function Produtos() {
           aoMudar={setOrdem}
           opcoes={[{ valor: 'recentes', rotulo: 'Alterados recentemente' }, { valor: 'nome', rotulo: 'Nome: A–Z' }, { valor: 'margem', rotulo: 'Menor margem primeiro' }]}
         />
-        <Selecao
+        <Combo
           rotulo="Filtros salvos"
           valor=""
           aoMudar={(v) => {
             const f = estado.preferencias.filtrosSalvos?.[Number(v)]
             if (f) { setBusca(f.busca); setStatus(f.status as typeof status); setCategoria(f.categoria) }
           }}
-          opcoes={[{ valor: '', rotulo: 'Escolher filtro' }, ...(estado.preferencias.filtrosSalvos ?? []).map((f, i) => ({ valor: String(i), rotulo: f.nome }))]}
+          marcador="Escolher filtro"
+          opcoes={(estado.preferencias.filtrosSalvos ?? []).map((f, i) => ({ valor: String(i), rotulo: f.nome }))}
         />
         <Botao variante="fantasma" onClick={() => setJanela('filtro')}>Salvar filtro</Botao>
       </div>
@@ -240,7 +245,7 @@ export default function Produtos() {
                   <div className="product-name-cell">
                     {p.imagemId ? <ImagemDoEspaco className="product-thumb"  caminho={enderecos.imagem(p.imagemId)} alt="" /> : <div className="product-icon"><Package size={20} /></div>}
                     <div>
-                      <button className="product-title" onClick={() => editar(p, '/produtos')}>{p.nome}</button>
+                      <button className="product-title" onClick={() => (escreve ? setEditando(p) : editar(p, '/produtos'))}>{p.nome}</button>
                       <small>{p.categoria}{p.exemplo ? ' · Exemplo' : ''}</small>
                       {p.sku ? <small>SKU {p.sku}</small> : null}
                     </div>
@@ -251,9 +256,10 @@ export default function Produtos() {
                     <Selo tom={!r ? 'vermelho' : Number(r.margem) < 0 ? 'vermelho' : r.atingeMeta ? 'verde' : 'ambar'}>{r ? pct(r.margem) : 'Revisar'}</Selo>
                   </div>
                   <div className="product-actions">
-                    <button className="text-link" onClick={() => etiquetar([p.id])} aria-label={`Imprimir etiqueta de ${p.nome}`}>Etiqueta</button>
+                    <button className="icon-button" onClick={() => etiquetar([p.id])} aria-label={`Imprimir etiqueta de ${p.nome}`} title="Imprimir etiqueta"><Tag size={16} /></button>
                     {escreve ? (
                       <>
+                        <button className="icon-button" aria-label={`Editar ${p.nome}`} title="Editar" onClick={() => setEditando(p)}><Pencil size={16} /></button>
                         <button className={`icon-button ${p.favorito ? 'favorite' : ''}`} aria-label={`${p.favorito ? 'Desafixar' : 'Fixar'} ${p.nome}`} onClick={() => void acao(p, 'favorito')}><Star size={16} /></button>
                         <button className="icon-button" aria-label={`Duplicar ${p.nome}`} onClick={() => void acao(p, 'duplicar', 'Cópia criada no catálogo.')}><Copy size={16} /></button>
                       </>
@@ -267,6 +273,9 @@ export default function Produtos() {
                       >
                         {p.status === 'arquivado' ? <RotateCcw size={16} /> : <Archive size={16} />}
                       </button>
+                    ) : null}
+                    {escreve && p.status === 'arquivado' ? (
+                      <button className="icon-button danger" aria-label={`Apagar ${p.nome}`} title="Apagar de vez" onClick={() => setApagando(p)}><Trash2 size={16} /></button>
                     ) : null}
                   </div>
                 </article>
@@ -295,6 +304,32 @@ export default function Produtos() {
           <Botao onClick={async () => { if (arquivando) await acao(arquivando, 'arquivar', 'Produto arquivado.'); setArquivando(null) }}>Arquivar produto</Botao>
         </div>
       </Janela>
+
+      <Janela
+        aberta={!!apagando}
+        aoFechar={() => setApagando(null)}
+        titulo="Apagar o produto de vez?"
+        descricao="O produto, o histórico de preços e os cenários dele saem do catálogo e não voltam. Produto com movimentação de estoque ou venda não pode ser apagado: ele sustenta o custo médio e os relatórios, e fica arquivado."
+      >
+        <p><strong>{apagando?.nome}</strong></p>
+        <div className="dialog-actions">
+          <Botao variante="fantasma" onClick={() => setApagando(null)}>Cancelar</Botao>
+          <Botao variante="perigo" ocupado={ocupado} onClick={async () => {
+            if (apagando) {
+              setOcupado(true)
+              try {
+                await agir(() => lucroApi.excluirProduto(apagando.id), 'Produto apagado.')
+                setSelecao((s) => s.filter((id) => id !== apagando.id))
+              } finally {
+                setOcupado(false)
+              }
+            }
+            setApagando(null)
+          }}><Trash2 size={15} />Apagar de vez</Botao>
+        </div>
+      </Janela>
+
+      <EditarProduto produto={editando} aoFechar={() => setEditando(null)} aoCompleta={(p) => { setEditando(null); editar(p, '/produtos') }} />
 
       <Janela aberta={janela === 'exportar'} aoFechar={() => setJanela(null)} titulo="Leve seus dados com você" descricao="As exportações usam os produtos salvos e incluem premissas de cálculo.">
         <div className="export-options">
@@ -379,7 +414,7 @@ export default function Produtos() {
                     opcoes={[{ valor: 'nenhum', rotulo: 'Sem ajuste' }, { valor: '90', rotulo: 'Final ,90' }, { valor: '99', rotulo: 'Final ,99' }, { valor: 'inteiro', rotulo: 'Inteiro' }]}
                   />
                 ) : tipoDeRegra === 'canalId' ? (
-                  <Selecao
+                  <Combo
                     rotulo="Canal"
                     valor={regra.canalId}
                     aoMudar={(v) => setRegra({ ...regra, canalId: v })}

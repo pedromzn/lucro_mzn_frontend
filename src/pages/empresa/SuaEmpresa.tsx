@@ -1,6 +1,7 @@
 /**
- * Sua empresa — dados, pessoas e espaços de trabalho, para o responsável e os
- * administradores. Tudo aqui mora no NÚCLEO e vale para a empresa inteira; o
+ * Sua empresa — dados, pessoas, espaços de trabalho e os logos, para o
+ * responsável e os administradores. Quase tudo aqui mora no NÚCLEO (os logos são
+ * do app: `LogosDaEmpresa`) e vale para a empresa inteira; o
  * mock não tinha esta tela (era conta individual), então ela usa as peças dele
  * com o conteúdo das telas de mesma função do painel do MKT.
  *
@@ -12,11 +13,13 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { DadosDaEmpresa } from './DadosDaEmpresa'
 import { Pessoas } from './Pessoas'
 import { Espacos } from './Espacos'
+import { LogosDaEmpresa } from './LogosDaEmpresa'
 
 const ABAS = [
   ['/empresa', 'Dados da empresa'],
   ['/empresa/pessoas', 'Pessoas e licenças'],
   ['/empresa/espacos', 'Espaços de trabalho'],
+  ['/empresa/logos', 'Logos'],
 ] as const
 
 export default function SuaEmpresa() {
@@ -31,7 +34,7 @@ export default function SuaEmpresa() {
         ))}
       </div>
       <div className="account-content">
-        {aba === '/empresa' ? <DadosDaEmpresa /> : aba === '/empresa/pessoas' ? <Pessoas /> : <Espacos />}
+        {aba === '/empresa' ? <DadosDaEmpresa /> : aba === '/empresa/pessoas' ? <Pessoas /> : aba === '/empresa/logos' ? <LogosDaEmpresa /> : <Espacos />}
       </div>
     </>
   )

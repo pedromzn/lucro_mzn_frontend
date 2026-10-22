@@ -24,7 +24,15 @@ export const decimalDeEstoque = z
   .refine((v) => D(v).lte('1000000000'), 'Valor acima do limite permitido.')
 
 export const TIPOS_DE_MOVIMENTO = ['inicial', 'entrada', 'venda', 'perda', 'uso_proprio', 'conferencia'] as const
-export type TipoDeMovimento = (typeof TIPOS_DE_MOVIMENTO)[number] | 'devolucao'
+/** `devolucao` nasce da devolução da venda, e `transferencia` só muda o endereço (o saldo total fica): nenhum dos dois entra pelo formulário de movimento. */
+export type TipoDeMovimento = (typeof TIPOS_DE_MOVIMENTO)[number] | 'devolucao' | 'transferencia'
+
+/** Uma posição: estrutura · nível · vão. Mora aqui, e não em `enderecos.ts`, porque aquele importa daqui — o contrário faria um ciclo. */
+export const enderecoDoMovimento = z.object({
+  estruturaId: z.string().max(40),
+  nivel: z.number().int().min(0).max(7),
+  vao: z.number().int().min(0).max(11),
+})
 
 export const FORMAS_DE_PAGAMENTO_DA_VENDA = ['Pix', 'Cartão', 'Dinheiro', 'Boleto', 'Outro'] as const
 
@@ -42,6 +50,12 @@ export const movimentoSchema = z.object({
   canalId: z.string().max(40).nullable().default(null),
   formaDePagamento: z.enum(FORMAS_DE_PAGAMENTO_DA_VENDA).default('Pix'),
   motivo: z.string().trim().max(250).default(''),
+  /**
+   * Onde (PLANO-ESTOQUE-3D.md, E1): o DESTINO de uma entrada, a ORIGEM de uma
+   * saída, a POSIÇÃO contada numa conferência. Sem endereço, entrada fica "a
+   * guardar" e saída segue a ordem de `planoDeSaida`.
+   */
+  endereco: enderecoDoMovimento.nullable().default(null),
 })
 export type PedidoDeMovimento = z.infer<typeof movimentoSchema>
 
@@ -53,6 +67,7 @@ export const NOMES_DOS_MOVIMENTOS: Record<TipoDeMovimento, string> = {
   uso_proprio: 'Uso próprio',
   conferencia: 'Conferência de estoque',
   devolucao: 'Devolução da venda',
+  transferencia: 'Transferência entre posições',
 }
 
 /** Os que tiram do estoque — e por isso pedem saldo. */
@@ -67,6 +82,17 @@ export function conferirQuantidade(unidade: string, valor: string): void {
   if (!FRACIONAVEIS.has(unidade) && !D(valor).isInteger()) {
     throw new Error(`Informe uma quantidade inteira para produtos vendidos por ${unidade}.`)
   }
+}
+
+/** As unidades contáveis que ganham plural — "kg", "ml" e "metro" se escrevem iguais. */
+const COM_PLURAL: Record<string, string> = { unidade: 'unidades', pacote: 'pacotes', kit: 'kits', caixa: 'caixas', par: 'pares', peca: 'peças', 'peça': 'peças', litro: 'litros' }
+
+/** "24 unidades", "1 unidade", "2,5 kg" — a quantidade com a unidade escrita como se fala. */
+export function rotuloDaQuantidade(valor: string | number, unidade: string): string {
+  const n = D(valor)
+  const texto = n.toDecimalPlaces(3).toString().replace('.', ',')
+  const nome = n.abs().eq(1) ? unidade : (COM_PLURAL[unidade] ?? unidade)
+  return `${texto} ${nome}`
 }
 
 export interface SaldoAtual {

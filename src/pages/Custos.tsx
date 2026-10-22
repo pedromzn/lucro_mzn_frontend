@@ -16,7 +16,7 @@ import type { CustoExtra, Premissas } from '@shared/preco'
 import { CATEGORIAS_DE_CUSTO, TIPOS_DE_CANAL } from '@shared/contratos'
 import { lucroApi, type Canal, type ModeloDeCusto, type TipoDeModelo } from '@/lib/api'
 import { agir, usePainel } from '@/lib/painel'
-import { Aviso, Botao, CampoDeTexto, CampoNumero, Janela, Selecao, Selo, Vazio, brl, data, pct } from '@/components/ui'
+import { Aviso, Botao, CampoDeTexto, CampoNumero, Janela, Selecao, Selo, Vazio, brl, data, pct, Combo } from '@/components/ui'
 import { EditorDeCobrancas } from '@/precos/EditorDeCobrancas'
 
 type CanalEmEdicao = Omit<Canal, 'id' | 'revisao' | 'atualizadoEm'> & { id?: string; revisao?: number }
@@ -154,14 +154,15 @@ export default function Custos() {
             <div className="panel section-gap">
               <h3>Salvar um perfil completo</h3>
               <p className="muted">Use as premissas de um produto como ponto de partida para os próximos.</p>
-              <Selecao
+              <Combo
                 rotulo="Produto de referência"
                 valor=""
                 aoMudar={(v) => {
                   const p = estado.produtos.find((a) => a.id === v)
                   if (p) setModelo({ nome: `Perfil — ${p.nome}`, tipo: 'perfil', dados: p.premissas as unknown as Record<string, unknown> })
                 }}
-                opcoes={[{ valor: '', rotulo: 'Escolher produto salvo' }, ...estado.produtos.map((p) => ({ valor: p.id, rotulo: p.nome }))]}
+                marcador="Escolher produto salvo"
+                opcoes={estado.produtos.map((p) => ({ valor: p.id, rotulo: p.nome }))}
               />
             </div>
           ) : null}

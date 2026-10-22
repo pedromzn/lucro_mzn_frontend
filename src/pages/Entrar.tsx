@@ -12,12 +12,17 @@
  * DESAFIO de cinco minutos, e esta tela troca de passo para pedir o código do
  * autenticador. O desafio não abre nada sozinho: o servidor o recusa em
  * qualquer rota de sessão, então parar aqui é parar de verdade.
+ *
+ * **E pode parar no teto de sessões** (10 por pessoa, 22/10/2026): a senha (e o
+ * código) estavam certos, mas a conta já está aberta em dez lugares. A tela
+ * mostra as dez e a pessoa escolhe o que encerrar para entrar.
  */
 
 import { useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
-import { autenticacao, useSessao } from '@/lib/sessao'
+import { autenticacao, limiteDoErro, useSessao, type LimiteDeSessoes } from '@/lib/sessao'
+import { EscolhaDeSessoes } from '@/conta/SessoesAbertas'
 import { Aviso, BotaoPrincipal, CampoDeTexto, MolduraDeAcesso } from '@/acesso/Moldura'
 
 /**
@@ -46,6 +51,8 @@ export default function Entrar() {
   const [desafio, setDesafio] = useState<string | null>(null)
   const [codigo, setCodigo] = useState('')
   const [carregando, setCarregando] = useState(false)
+  /* o teto de sessões: enquanto houver, a tela é a da escolha */
+  const [limite, setLimite] = useState<LimiteDeSessoes | null>(null)
 
   const expirou = params.get('expirou') === '1'
 
@@ -69,7 +76,9 @@ export default function Entrar() {
       entrar(resultado)
       navegar(destino, { replace: true })
     } catch (falha) {
-      setErro(falha instanceof Error ? falha.message : 'Não foi possível entrar.')
+      const noTeto = limiteDoErro(falha)
+      if (noTeto) setLimite(noTeto)
+      else setErro(falha instanceof Error ? falha.message : 'Não foi possível entrar.')
     } finally {
       setCarregando(false)
     }
@@ -85,6 +94,13 @@ export default function Entrar() {
       entrar(retrato)
       navegar(destino, { replace: true })
     } catch (falha) {
+      const noTeto = limiteDoErro(falha)
+      if (noTeto) {
+        setDesafio(null)
+        setCodigo('')
+        setLimite(noTeto)
+        return
+      }
       setErro(falha instanceof Error ? falha.message : 'Não foi possível confirmar o código.')
       setCodigo('')
       /*
@@ -95,6 +111,21 @@ export default function Entrar() {
     } finally {
       setCarregando(false)
     }
+  }
+
+  if (limite) {
+    return (
+      <MolduraDeAcesso
+        titulo="Sua conta está aberta em muitos lugares."
+        subtitulo={`O máximo é de ${limite.limite} sessões ao mesmo tempo. Escolha quais encerrar para entrar aqui.`}
+      >
+        <EscolhaDeSessoes
+          limite={limite}
+          aoEntrar={(retrato) => { entrar(retrato); navegar(destino, { replace: true }) }}
+          aoVoltar={(motivo) => { setLimite(null); setSenha(''); setErro(motivo ?? null) }}
+        />
+      </MolduraDeAcesso>
+    )
   }
 
   if (desafio) {

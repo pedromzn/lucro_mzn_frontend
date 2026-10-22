@@ -77,6 +77,21 @@ export const MODELOS_DE_FABRICA: ModeloDeFabrica[] = [
   },
 ]
 
+/**
+ * O ESTILO é o desenho da etiqueta, e o MODELO é o papel (22/10/2026). Os dois
+ * se combinam: qualquer estilo sai em qualquer folha, e o motor encolhe o preço
+ * para caber. O estilo vai no retrato, e o clique repetido devolve o mesmo arquivo.
+ */
+export const ESTILOS_DE_ETIQUETA = ['classico', 'destaque', 'faixa', 'minimalista'] as const
+export type EstiloDeEtiqueta = (typeof ESTILOS_DE_ETIQUETA)[number]
+
+export const NOMES_DOS_ESTILOS: Record<EstiloDeEtiqueta, { nome: string; descricao: string }> = {
+  classico: { nome: 'Clássica', descricao: 'Loja no alto, nome e preço grande. Serve para quase tudo.' },
+  destaque: { nome: 'Preço em destaque', descricao: 'O preço ocupa o centro, para ler de longe na gôndola.' },
+  faixa: { nome: 'Faixa da loja', descricao: 'Uma faixa escura com o nome da loja no topo, como tag de vitrine.' },
+  minimalista: { nome: 'Minimalista', descricao: 'Tudo centralizado, com contorno fino. Para boutique e presente.' },
+}
+
 /** Os tetos de uma geração — um arquivo que a impressora de casa ainda imprime. */
 export const MAXIMO_DE_ETIQUETAS = 500
 export const MAXIMO_DE_PRODUTOS_POR_ARQUIVO = 100
@@ -86,6 +101,7 @@ export const pedidoDeEtiquetasSchema = z
     /** a geração é idempotente por esta chave: o mesmo clique devolve o mesmo PDF */
     chaveDaOperacao: z.string().uuid(),
     modeloId: z.string().max(40),
+    estilo: z.enum(ESTILOS_DE_ETIQUETA).default('classico'),
     itens: z
       .array(z.object({ produtoId: z.string().max(40), copias: z.number().int().min(1).max(MAXIMO_DE_ETIQUETAS) }))
       .min(1)

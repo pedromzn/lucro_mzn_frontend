@@ -16,14 +16,13 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, Check, Package, Plus, Save, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { PREMISSAS_PADRAO, type CustoExtra, type Premissas } from '@shared/preco'
 import { CATEGORIAS, CATEGORIAS_DE_CUSTO, UNIDADES } from '@shared/contratos'
-import { lucroApi, type Produto, type ProdutoParaGravar } from '@/lib/api'
+import { lucroApi, type Produto, TAMANHO_MAXIMO_DA_IMAGEM } from '@/lib/api'
+import { paraGravar, type Rascunho } from '@/components/EditarProduto'
 import { agir, usePainel } from '@/lib/painel'
 import { toast } from '@/lib/avisos'
 import { Aviso, Botao, Combo, CampoDeTexto, CampoNumero, Selecao, brl, erroDe, novaChave, pct } from '@/components/ui'
 import { PainelDoResultado, usarCalculo } from '@/precos/Resultado'
 import { EditorDeCobrancas } from '@/precos/EditorDeCobrancas'
-
-type Rascunho = ProdutoParaGravar & { id?: string; revisao?: number }
 
 const PASSOS = ['Produto', 'Custos', 'Canal', 'Sua meta', 'Revisão']
 const TITULOS = ['O que você vai vender?', 'Quanto custa para você?', 'Onde será a venda?', 'O que você quer que sobre?', 'Tudo pronto para decidir.']
@@ -34,12 +33,6 @@ const SUBTITULOS = [
   'A margem é a parte do preço que sobra após os custos informados.',
   'Confira as premissas e salve o produto no seu catálogo.',
 ]
-const LIMITE_DA_IMAGEM = 1_000_000
-
-const paraGravar = (p: Produto): Rascunho => ({
-  id: p.id, revisao: p.revisao, nome: p.nome, sku: p.sku, categoria: p.categoria, unidade: p.unidade, status: p.status,
-  favorito: p.favorito, canalId: p.canalId, imagemId: p.imagemId, tags: p.tags, notas: p.notas, premissas: p.premissas,
-})
 
 export default function Precificar() {
   const { id } = useParams()
@@ -115,7 +108,7 @@ function Assistente({ existente, aoRecomecar }: { existente?: Produto; aoRecomec
 
   async function enviarImagem(arquivo: File | undefined) {
     if (!arquivo) return
-    if (arquivo.size > LIMITE_DA_IMAGEM) {
+    if (arquivo.size > TAMANHO_MAXIMO_DA_IMAGEM) {
       toast('Escolha uma imagem de até 1 MB.')
       return
     }
@@ -189,11 +182,12 @@ function Assistente({ existente, aoRecomecar }: { existente?: Produto; aoRecomec
               </div>
               <div className="form-grid">
                 <CampoNumero rotulo={`Embalagem por ${p.unidade}`} valor={x.embalagem} aoMudar={(v) => premissa('embalagem', v)} />
-                <Selecao
+                <Combo
                   rotulo="Reutilizar embalagem"
                   valor=""
                   aoMudar={(v) => { const m = estado.modelosDeCusto.find((a) => a.id === v); if (m) premissa('embalagem', String(m.dados.valor)) }}
-                  opcoes={[{ valor: '', rotulo: 'Escolher modelo salvo' }, ...modelos('embalagem').map((m) => ({ valor: m.id, rotulo: m.nome }))]}
+                  marcador="Escolher modelo salvo"
+                  opcoes={modelos('embalagem').map((m) => ({ valor: m.id, rotulo: m.nome }))}
                 />
               </div>
               <CampoNumero rotulo={`Frete pago por você, por ${p.unidade}`} valor={x.frete} aoMudar={(v) => premissa('frete', v)} />
@@ -238,14 +232,15 @@ function Assistente({ existente, aoRecomecar }: { existente?: Produto; aoRecomec
                       <Plus size={16} />Adicionar
                     </Botao>
                   </div>
-                  <Selecao
+                  <Combo
                     rotulo="Adicionar custo salvo"
                     valor=""
                     aoMudar={(v) => {
                       const m = estado.modelosDeCusto.find((a) => a.id === v)
                       if (m) premissa('custos', [...x.custos, { id: novaChave(), nome: m.nome, ...(m.dados as Omit<CustoExtra, 'id' | 'nome'>) }])
                     }}
-                    opcoes={[{ valor: '', rotulo: 'Escolher da biblioteca' }, ...modelos('custo').map((m) => ({ valor: m.id, rotulo: m.nome }))]}
+                    marcador="Escolher da biblioteca"
+                    opcoes={modelos('custo').map((m) => ({ valor: m.id, rotulo: m.nome }))}
                   />
                 </div>
               </details>
@@ -333,7 +328,7 @@ function Assistente({ existente, aoRecomecar }: { existente?: Produto; aoRecomec
                 ]}
               />
               {x.arredondamento === 'multiplo' ? <CampoNumero rotulo="Múltiplo" valor={x.multiplo} aoMudar={(v) => premissa('multiplo', v)} /> : null}
-              <Selecao
+              <Combo
                 rotulo="Reutilizar perfil de precificação"
                 valor=""
                 aoMudar={(v) => {
@@ -341,7 +336,8 @@ function Assistente({ existente, aoRecomecar }: { existente?: Produto; aoRecomec
                   /* o perfil traz tudo, menos o que é deste produto: o custo de compra e o preço praticado */
                   if (m) mudar('premissas', { ...(m.dados as unknown as Premissas), custo: x.custo, quantidade: x.quantidade, preco: x.preco })
                 }}
-                opcoes={[{ valor: '', rotulo: 'Escolher um perfil salvo' }, ...modelos('perfil').map((m) => ({ valor: m.id, rotulo: m.nome }))]}
+                marcador="Escolher um perfil salvo"
+                opcoes={modelos('perfil').map((m) => ({ valor: m.id, rotulo: m.nome }))}
               />
             </div>
           ) : null}

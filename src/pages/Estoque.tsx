@@ -6,27 +6,46 @@
  * `chaveDaOperacao` nova por abertura de janela — o duplo clique, ou a rede
  * que reenviou, chega ao servidor com a mesma chave e não baixa o estoque duas
  * vezes.
+ *
+ * Três abas: o **espaço 3D** (PLANO-ESTOQUE-3D.md, carregado sob demanda e
+ * aberto primeiro quando o aparelho tem WebGL), a **lista** de sempre — que é a
+ * saída de quem não tem WebGL — e as **movimentações**.
  */
 
 import { BaixarArquivo } from '@/components/ArquivosDoEspaco'
-import { useCallback, useEffect, useState } from 'react'
-import { ArrowDownLeft, ArrowUpRight, Boxes, Download, History, PackagePlus, Plus, Search, ShoppingBag } from 'lucide-react'
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Boxes, Box, Download, History, PackagePlus, Plus, Search, ShoppingBag } from 'lucide-react'
 import { D } from '@shared/preco'
-import { FORMAS_DE_PAGAMENTO_DA_VENDA, NOMES_DOS_MOVIMENTOS, TIPOS_DE_MOVIMENTO, type TipoDeMovimento } from '@shared/estoque'
-import { enderecos, lucroApi, type Movimento, type PedidoDeMovimento, type Produto, type ProdutoNoEstoque, type TelaDoEstoque } from '@/lib/api'
+import { NOMES_DOS_MOVIMENTOS, rotuloDaQuantidade, type TipoDeMovimento } from '@shared/estoque'
+import { enderecos, lucroApi, type Movimento, type Produto, type ProdutoNoEstoque, type TelaDoEstoque } from '@/lib/api'
 import { agir, usePainel } from '@/lib/painel'
 import { toast } from '@/lib/avisos'
-import { Aviso, Botao, CampoDeTexto, CampoNumero, Combo, Janela, Selecao, Selo, Vazio, brl, data, erroDe, novaChave, quantidade } from '@/components/ui'
+import { CamposDoMovimento, novoFormulario, type FormularioDeMovimento } from '@/components/FormularioDeMovimento'
+import { Aviso, Botao, CampoDeTexto, CampoNumero, Janela, Selecao, Selo, Vazio, brl, data, erroDe, novaChave, quantidade } from '@/components/ui'
 
-type Formulario = Required<Omit<PedidoDeMovimento, 'canalId'>> & { canalId: string | null }
+/* o three.js e a cena só baixam quando a aba abre: quem usa a lista não paga por eles */
+const EspacoDoEstoque = lazy(() => import('@/estoque3d/EspacoDoEstoque'))
 
-/* o custo de uma unidade, a partir do custo do lote no cadastro do produto */
-const custoUnitarioDe = (p: Pick<Produto, 'premissas'>) => {
+type Secao = 'espaco' | 'estoque' | 'historico'
+
+/** WebGL de verdade, não só a promessa do navegador: sem ele, a aba 3D nem aparece. */
+export function temWebGL(): boolean {
   try {
-    return D(p.premissas.custo).div(p.premissas.quantidade).toFixed(6)
+    const tela = document.createElement('canvas')
+    return !!(tela.getContext('webgl2') ?? tela.getContext('webgl'))
   } catch {
-    return '0'
+    return false
   }
+}
+
+const CHAVE_DA_ABA = 'lucro.estoque.aba'
+/* `localStorage` lança em janela anônima e com dados de site bloqueados: a aba lembrada é conveniência, nunca requisito */
+function abaLembrada(com3d: boolean): Secao {
+  try {
+    const v = localStorage.getItem(CHAVE_DA_ABA)
+    if (v === 'estoque' || v === 'historico' || (v === 'espaco' && com3d)) return v
+  } catch { /* sem armazenamento: vale o padrão */ }
+  return com3d ? 'espaco' : 'estoque'
 }
 
 export default function Estoque() {
@@ -37,8 +56,13 @@ export default function Estoque() {
   const [filtro, setFiltro] = useState<'todos' | 'repor'>('todos')
   const [pagina, setPagina] = useState(1)
   const [ocupado, setOcupado] = useState(false)
-  const [secao, setSecao] = useState<'estoque' | 'historico'>('estoque')
-  const [form, setForm] = useState<Formulario | null>(null)
+  const [com3d] = useState(temWebGL)
+  const [secao, setSecaoAgora] = useState<Secao>(() => abaLembrada(com3d))
+  const setSecao = (s: Secao) => {
+    setSecaoAgora(s)
+    try { localStorage.setItem(CHAVE_DA_ABA, s) } catch { /* idem */ }
+  }
+  const [form, setForm] = useState<FormularioDeMovimento | null>(null)
   const [minimo, setMinimo] = useState<{ produtoId: string; minimo: string; nome: string; unidade: string } | null>(null)
   const [devolvendo, setDevolvendo] = useState<(Movimento & { chaveDaOperacao: string }) | null>(null)
   const [motivo, setMotivo] = useState('')
@@ -71,16 +95,8 @@ export default function Estoque() {
   const abrir = (p?: Pick<Produto, 'id' | 'premissas' | 'canalId'>, tipo: TipoDeMovimento = 'entrada') => {
     const escolhido = p ?? produtos[0]
     if (!escolhido) return
-    setForm({
-      chaveDaOperacao: novaChave(), produtoId: escolhido.id, tipo: tipo as Formulario['tipo'], quantidade: '1', custoUnitario: custoUnitarioDe(escolhido),
-      precoUnitario: escolhido.premissas.preco, desconto: '0', canalId: escolhido.canalId ?? null, formaDePagamento: 'Pix', motivo: '',
-    })
+    setForm(novoFormulario(escolhido, tipo))
   }
-  const escolhido = produtos.find((p) => p.id === form?.produtoId)
-  let totalDaVenda = '—'
-  try {
-    if (form) totalDaVenda = brl(D(form.precoUnitario || 0).minus(form.desconto || 0).times(form.quantidade || 0).toFixed(2))
-  } catch { /* o campo ainda está sendo digitado */ }
 
   async function salvar() {
     if (!form) return
@@ -98,7 +114,8 @@ export default function Estoque() {
       {erro ? <Aviso tipo="erro">{erro}</Aviso> : null}
       <div className="toolbar">
         <div className="subnav">
-          <button className={secao === 'estoque' ? 'active' : ''} onClick={() => setSecao('estoque')}><Boxes size={16} />Estoque</button>
+          {com3d ? <button className={secao === 'espaco' ? 'active' : ''} onClick={() => setSecao('espaco')}><Box size={16} />Espaço 3D</button> : null}
+          <button className={secao === 'estoque' ? 'active' : ''} onClick={() => setSecao('estoque')}><Boxes size={16} />Lista</button>
           <button className={secao === 'historico' ? 'active' : ''} onClick={() => setSecao('historico')}><History size={16} />Movimentações</button>
         </div>
         <div className="toolbar-actions">
@@ -114,18 +131,35 @@ export default function Estoque() {
 
       {tela ? (
         <>
-          <div className="metric-grid stock-metrics">
-            <div className="metric"><span>Produtos com estoque controlado</span><strong>{tela.totais.controlados}</strong><small>Saldo inicial ou movimentação registrada</small></div>
-            <div className="metric"><span>Precisam de reposição</span><strong>{tela.totais.repor}</strong><small>Saldo igual ou abaixo do mínimo</small></div>
-            <div className="metric"><span>Valor de aquisição em estoque</span><strong>{brl(tela.totais.valorEmEstoque)}</strong><small>Baseado no custo médio registrado</small></div>
-            <div className="metric"><span>Vendas registradas</span><strong>{brl(tela.totais.totalVendido)}</strong><small>{tela.totais.vendas} venda(s) · exclui devoluções integrais</small></div>
-          </div>
-          <Aviso>
-            Resultado estimado das vendas registradas: <strong>{brl(tela.totais.resultadoEstimado)}</strong>. Inclui o custo médio e os custos do perfil usado
-            em cada venda. Consulte os detalhes no histórico.
-          </Aviso>
+          {/* no Espaço 3D os números viram uma faixa fina: a cena é o assunto ali (pedido do Pedro, 22/10/2026) */}
+          {secao === 'espaco' ? (
+            <dl className="stock-strip">
+              <div title="Saldo inicial ou movimentação registrada"><dt>Com estoque controlado</dt><dd>{tela.totais.controlados}</dd></div>
+              <div title="Saldo igual ou abaixo do mínimo"><dt>Precisam de reposição</dt><dd>{tela.totais.repor}</dd></div>
+              <div title="Baseado no custo médio registrado"><dt>Valor de aquisição</dt><dd>{brl(tela.totais.valorEmEstoque)}</dd></div>
+              <div title={`${tela.totais.vendas} venda(s) · exclui devoluções integrais`}><dt>Vendas registradas</dt><dd>{brl(tela.totais.totalVendido)}</dd></div>
+              <div title="Inclui o custo médio e os custos do perfil usado em cada venda"><dt>Resultado estimado</dt><dd>{brl(tela.totais.resultadoEstimado)}</dd></div>
+            </dl>
+          ) : (
+            <>
+              <div className="metric-grid stock-metrics">
+                <div className="metric"><span>Produtos com estoque controlado</span><strong>{tela.totais.controlados}</strong><small>Saldo inicial ou movimentação registrada</small></div>
+                <div className="metric"><span>Precisam de reposição</span><strong>{tela.totais.repor}</strong><small>Saldo igual ou abaixo do mínimo</small></div>
+                <div className="metric"><span>Valor de aquisição em estoque</span><strong>{brl(tela.totais.valorEmEstoque)}</strong><small>Baseado no custo médio registrado</small></div>
+                <div className="metric"><span>Vendas registradas</span><strong>{brl(tela.totais.totalVendido)}</strong><small>{tela.totais.vendas} venda(s) · exclui devoluções integrais</small></div>
+              </div>
+              <Aviso>
+                Resultado estimado das vendas registradas: <strong>{brl(tela.totais.resultadoEstimado)}</strong>. Inclui o custo médio e os custos do perfil usado
+                em cada venda. Consulte os detalhes no histórico.
+              </Aviso>
+            </>
+          )}
 
-          {secao === 'estoque' ? (
+          {secao === 'espaco' ? (
+            <Suspense fallback={<div className="skeleton space-loading section-gap" />}>
+              <EspacoDoEstoque aoMudar={() => void carregar()} />
+            </Suspense>
+          ) : secao === 'estoque' ? (
             <>
               <div className="toolbar section-gap">
                 <div className="search">
@@ -191,16 +225,25 @@ export default function Estoque() {
               <div className="stock-history">
                 {tela.movimentos.map((m) => {
                   const entra = D(m.quantidade).gte(0)
+                  const transferencia = m.tipo === 'transferencia'
+                  const de = m.enderecos.filter((l) => D(l.quantidade).lt(0)).map((l) => l.rotulo)
+                  const para = m.enderecos.filter((l) => D(l.quantidade).gt(0)).map((l) => l.rotulo)
+                  const lugar = transferencia
+                    ? `${de.join(', ') || 'A guardar'} → ${para.join(', ') || 'A guardar'}`
+                    : (para.length ? `para ${para.join(', ')}` : de.length ? `de ${de.join(', ')}` : '')
                   return (
                     <article key={m.id}>
-                      <div className={`movement-direction ${entra ? 'in' : 'out'}`}>{entra ? <ArrowDownLeft size={19} /> : <ArrowUpRight size={19} />}</div>
+                      <div className={`movement-direction ${transferencia ? 'move' : entra ? 'in' : 'out'}`}>{transferencia ? <ArrowLeftRight size={19} /> : entra ? <ArrowDownLeft size={19} /> : <ArrowUpRight size={19} />}</div>
                       <div className="movement-description">
                         <strong>{m.produto}</strong>
                         <span>{NOMES_DOS_MOVIMENTOS[m.tipo as TipoDeMovimento] ?? m.tipo} · {data(m.criadoEm)}</span>
-                        <small>{m.motivo ? `${m.motivo} · ` : ''}saldo após: {quantidade(m.saldoDepois)} {m.unidade}</small>
-                        <small>Custo de aquisição usado: {brl(m.custoUnitario)} por {m.unidade}</small>
+                        <small>{m.motivo ? `${m.motivo} · ` : ''}saldo após: {rotuloDaQuantidade(m.saldoDepois, m.unidade)}</small>
+                        {lugar ? <small>{lugar}</small> : null}
+                        {transferencia ? null : <small>Custo de aquisição usado: {brl(m.custoUnitario)} por {m.unidade}</small>}
                       </div>
-                      <strong className="movement-amount">{D(m.quantidade).gt(0) ? '+' : ''}{quantidade(m.quantidade)} {m.unidade}</strong>
+                      <strong className="movement-amount">{transferencia
+                        ? rotuloDaQuantidade(m.enderecos.find((l) => D(l.quantidade).gt(0))?.quantidade ?? D(m.enderecos[0]?.quantidade ?? 0).abs().toString(), m.unidade)
+                        : `${D(m.quantidade).gt(0) ? '+' : ''}${rotuloDaQuantidade(m.quantidade, m.unidade)}`}</strong>
                       {m.tipo === 'venda' && m.vendaId ? (
                         <>
                           {m.statusDaVenda === 'concluida' ? (
@@ -234,66 +277,7 @@ export default function Estoque() {
       ) : !erro ? <div className="skeleton loading-title" /> : null}
 
       <Janela aberta={!!form} aoFechar={() => { if (!ocupado) setForm(null) }} titulo="Registrar movimentação" descricao="Confira o produto, a quantidade e os valores antes de salvar.">
-        {form ? (
-          <div className="form-stack">
-            <Combo
-              rotulo="Produto"
-              valor={form.produtoId}
-              opcoes={produtos.map((p) => ({ valor: p.id, rotulo: p.nome }))}
-              aoMudar={(v) => {
-                const p = produtos.find((a) => a.id === v)
-                if (p) setForm({ ...form, produtoId: v, custoUnitario: custoUnitarioDe(p), precoUnitario: p.premissas.preco, canalId: p.canalId ?? null })
-              }}
-            />
-            <Selecao
-              rotulo="O que aconteceu?"
-              valor={form.tipo}
-              aoMudar={(tipo) => setForm({ ...form, tipo })}
-              opcoes={TIPOS_DE_MOVIMENTO.map((t) => ({ valor: t, rotulo: NOMES_DOS_MOVIMENTOS[t] }))}
-            />
-            <CampoNumero
-              rotulo={form.tipo === 'conferencia' ? 'Quantidade contada no estoque' : 'Quantidade desta movimentação'}
-              prefixo={escolhido?.unidade ?? 'un.'}
-              valor={form.quantidade}
-              aoMudar={(v) => setForm({ ...form, quantidade: v })}
-              dica={form.tipo === 'conferencia' ? 'Informe o saldo final contado, não a diferença.' : 'Use a mesma unidade do cadastro do produto.'}
-            />
-            {form.tipo === 'inicial' || form.tipo === 'entrada' || form.tipo === 'conferencia' ? (
-              <CampoNumero
-                rotulo={`Custo de aquisição por ${escolhido?.unidade ?? 'unidade'}`}
-                valor={form.custoUnitario}
-                aoMudar={(v) => setForm({ ...form, custoUnitario: v })}
-                dica={form.tipo === 'conferencia' ? 'Usado somente se a conferência acrescentar quantidade.' : 'Este valor compõe o custo médio do estoque; o preço do catálogo permanece igual.'}
-              />
-            ) : null}
-            {form.tipo === 'venda' ? (
-              <>
-                <div className="form-grid">
-                  <CampoNumero rotulo={`Preço cobrado por ${escolhido?.unidade ?? 'unidade'}`} valor={form.precoUnitario} aoMudar={(v) => setForm({ ...form, precoUnitario: v })} />
-                  <CampoNumero rotulo="Desconto em cada unidade" valor={form.desconto} aoMudar={(v) => setForm({ ...form, desconto: v })} />
-                </div>
-                <div className="form-grid">
-                  <Selecao
-                    rotulo="Perfil de canal da venda"
-                    valor={form.canalId ?? ''}
-                    aoMudar={(v) => setForm({ ...form, canalId: v || null })}
-                    opcoes={[{ valor: '', rotulo: 'Usar custos do produto' }, ...estado.canais.map((c) => ({ valor: c.id, rotulo: c.nome }))]}
-                  />
-                  <Selecao rotulo="Como o cliente pagou?" valor={form.formaDePagamento} aoMudar={(v) => setForm({ ...form, formaDePagamento: v })} opcoes={FORMAS_DE_PAGAMENTO_DA_VENDA} />
-                </div>
-                <div className="stock-sale-total"><span>Total desta venda após desconto</span><strong>{totalDaVenda}</strong></div>
-                <Aviso>A venda baixa o estoque. As taxas usadas para estimar o resultado são as do perfil informado; o pagamento selecionado não altera taxas automaticamente.</Aviso>
-              </>
-            ) : null}
-            <CampoDeTexto
-              rotulo={form.tipo === 'perda' || form.tipo === 'uso_proprio' || form.tipo === 'conferencia' ? 'Motivo da movimentação' : 'Observação — opcional'}
-              value={form.motivo}
-              maxLength={250}
-              onChange={(e) => setForm({ ...form, motivo: e.target.value })}
-            />
-            <Botao ocupado={ocupado} onClick={() => void salvar()}>Confirmar {form.tipo === 'venda' ? 'venda' : 'movimentação'}</Botao>
-          </div>
-        ) : null}
+        {form ? <CamposDoMovimento form={form} aoMudar={setForm} produtos={produtos} canais={estado.canais} ocupado={ocupado} aoSalvar={() => void salvar()} /> : null}
       </Janela>
 
       <Janela aberta={!!minimo} aoFechar={() => setMinimo(null)} titulo="Definir estoque mínimo" descricao={minimo?.nome}>

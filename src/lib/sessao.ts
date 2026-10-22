@@ -173,8 +173,10 @@ async function pedir<T>(caminho: string, opcoes: RequestInit = {}): Promise<T> {
   })
   const corpo = await resposta.json().catch(() => ({}))
   if (!resposta.ok) {
-    const erro = new Error(corpo?.error || `Falha na requisição (${resposta.status})`) as Error & { codigo?: string }
+    const erro = new Error(corpo?.error || `Falha na requisição (${resposta.status})`) as Error & { codigo?: string; detalhes?: unknown }
     erro.codigo = corpo?.codigo
+    /* o 409 do teto de sessões traz o desafio e a lista aqui (`limiteDoErro`) */
+    erro.detalhes = corpo?.details
     throw erro
   }
   return (corpo?.data ?? corpo) as T
@@ -275,6 +277,35 @@ export function encerrarSessaoPorToken(): void {
  */
 export type ResultadoDeEntrada = RetratoDaSessao | { desafioDeMfa: string }
 
+/** uma sessão aberta da pessoa, como o Núcleo descreve (`servico/sessoes.ts`) */
+export interface SessaoAberta {
+  id: string
+  aplicativo: string | null
+  navegador: string
+  sistema: string
+  ip: string | null
+  criadaEm: string
+  ultimoUsoEm: string
+  expiraEm: string
+  atual: boolean
+}
+
+/**
+ * O teto de sessões (10 por pessoa, 22/10/2026). O login com a senha certa
+ * responde 409 `limite_de_sessoes` com um desafio de cinco minutos e a lista; a
+ * tela pede para escolher o que encerrar e manda para `liberarSessoes`.
+ */
+export interface LimiteDeSessoes {
+  desafio: string
+  limite: number
+  sessoes: SessaoAberta[]
+}
+
+export function limiteDoErro(erro: unknown): LimiteDeSessoes | null {
+  const e = erro as { codigo?: string; detalhes?: LimiteDeSessoes } | null
+  return e?.codigo === 'limite_de_sessoes' && e.detalhes?.desafio ? e.detalhes : null
+}
+
 export const autenticacao = {
   entrar: (email: string, senha: string) =>
     pedir<ResultadoDeEntrada>('/auth/login', {
@@ -288,6 +319,22 @@ export const autenticacao = {
       '/auth/mfa/verificar',
       { method: 'POST', body: JSON.stringify({ desafio, codigo }) },
     ),
+
+  /** encerra as sessões escolhidas e entra — a saída do teto de sessões */
+  liberarSessoes: (desafio: string, encerrar: string[]) =>
+    pedir<RetratoDaSessao>('/auth/sessoes/liberar', { method: 'POST', body: JSON.stringify({ desafio, encerrar }) }),
+
+  /** as sessões abertas da pessoa, para a aba Segurança */
+  sessoes: () => pedir<{ sessoes: SessaoAberta[]; limite: number }>('/auth/sessoes'),
+  encerrarSessao: (id: string) => pedir<{ encerradas: number }>(`/auth/sessoes/${encodeURIComponent(id)}/encerrar`, { method: 'POST' }),
+  encerrarOutrasSessoes: () => pedir<{ encerradas: number }>('/auth/sessoes/encerrar-outras', { method: 'POST' }),
+  /** todas, inclusive esta: o servidor apaga os cookies, e a tela volta para a entrada */
+  encerrarTodasSessoes: async () => {
+    const r = await pedir<{ encerradas: number }>('/auth/sessoes/encerrar-todas', { method: 'POST' })
+    /* o mesmo fim do `sair`: o servidor já apagou os cookies, e aqui se esquece o resto */
+    esquecerLocal()
+    return r
+  },
 
   definirSenha: (entrada: { email: string; token: string; senha: string; aceite: boolean }) =>
     pedir<RetratoDaSessao>('/auth/definir-senha', {

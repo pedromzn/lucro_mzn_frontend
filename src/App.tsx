@@ -79,6 +79,7 @@ export default function App() {
         <Route path="/empresa" element={doApp(<SuaEmpresa />, [...GESTORES])} />
         <Route path="/empresa/pessoas" element={doApp(<SuaEmpresa />, [...GESTORES])} />
         <Route path="/empresa/espacos" element={doApp(<SuaEmpresa />, [...GESTORES])} />
+        <Route path="/empresa/logos" element={doApp(<SuaEmpresa />, [...GESTORES])} />
 
         {/* o e-mail do MFA do Núcleo aponta para a Minha conta do painel do MKT */}
         <Route path="/configuracoes/minha-conta" element={<Navigate to="/conta?secao=seguranca" replace />} />

@@ -124,11 +124,12 @@ export default function Simular({ modo }: { modo: 'cenarios' | 'descontos' }) {
               <CampoNumero rotulo="Comissão nesta simulação" prefixo="%" valor={x.comissao} aoMudar={(v) => mudar('comissao', v)} />
               <CampoNumero rotulo="Margem mínima desejada" prefixo="%" valor={x.meta} aoMudar={(v) => mudar('meta', v)} />
             </div>
-            <Selecao
+            <Combo
               rotulo="Trocar perfil do canal"
               valor=""
               aoMudar={(v) => { const c = estado.canais.find((a) => a.id === v); if (c) setX(comCanal(x, c)) }}
-              opcoes={[{ valor: '', rotulo: 'Manter configuração do produto' }, ...estado.canais.map((c) => ({ valor: c.id, rotulo: c.nome }))]}
+              marcador="Manter configuração do produto"
+              opcoes={estado.canais.map((c) => ({ valor: c.id, rotulo: c.nome }))}
             />
             {erroDoDesconto ? <Aviso tipo="erro">{erroDoDesconto}</Aviso> : null}
             <div className="comparison-cards">
