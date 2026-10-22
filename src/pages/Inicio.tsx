@@ -7,6 +7,7 @@
  * Nada de faturamento, ROI ou tendência: sem venda registrada, seria inventar.
  */
 
+import { BaixarArquivo } from '@/components/ArquivosDoEspaco'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowRight, ArrowUpRight, Calculator, ChartNoAxesCombined, Check, Download, GitCompareArrows, Package, Percent, Plus,
@@ -200,8 +201,8 @@ export function Relatorios() {
           <p>Resultados estimados, a partir dos seus custos e preços.</p>
         </div>
         <div className="actions">
-          <a className="btn secondary" href={enderecos.exportar('pdf')}><Download size={16} />Relatório PDF</a>
-          <a className="btn ghost" href={enderecos.exportar('xlsx')}>Planilha Excel</a>
+          <BaixarArquivo className="btn secondary"  caminho={enderecos.exportar('pdf')}><Download size={16} />Relatório PDF</BaixarArquivo>
+          <BaixarArquivo className="btn ghost"  caminho={enderecos.exportar('xlsx')}>Planilha Excel</BaixarArquivo>
           <Botao variante="secundario" onClick={etiquetar}>Gerar etiquetas</Botao>
         </div>
       </div>

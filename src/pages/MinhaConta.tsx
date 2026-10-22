@@ -12,6 +12,7 @@
  *   e-mail da MZN, que atende todos os aplicativos.
  */
 
+import { BaixarArquivo } from '@/components/ArquivosDoEspaco'
 import { useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Download, KeyRound, LifeBuoy, LogOut, ShieldCheck, Trash2 } from 'lucide-react'
@@ -150,10 +151,7 @@ function Seguranca() {
     try {
       await autenticacao.trocarSenha(atual, nova)
       toast.success('Senha trocada. Entre novamente.')
-      setTimeout(() => {
-        sair()
-        location.href = '/entrar'
-      }, 1200)
+      location.href = '/entrar'
     } catch (erro) {
       toast.error(erro instanceof Error ? erro.message : 'Não foi possível trocar a senha.')
       setSalvando(false)
@@ -181,7 +179,7 @@ function Seguranca() {
           <h2>Dispositivos e sessões</h2>
           <p className="muted small">Sair encerra a sua sessão em todos os aparelhos, neste e nos outros aplicativos da MZN.</p>
         </div>
-        <Botao variante="fantasma" onClick={() => { sair(); location.href = '/entrar' }}><LogOut size={16} />Sair de todos os aparelhos</Botao>
+        <Botao variante="fantasma" onClick={async () => { try { await sair(); location.href = '/entrar' } catch (erro) { toast.error(erro instanceof Error ? erro.message : 'Não foi possível encerrar as sessões. Tente novamente.') } }}><LogOut size={16} />Sair de todos os aparelhos</Botao>
       </section>
     </>
   )
@@ -194,7 +192,7 @@ function Privacidade({ aoPedir }: { aoPedir: () => void }) {
       <h2>Seus dados pertencem a você.</h2>
       <p className="muted">Exporte seus registros ou solicite esclarecimentos sobre o tratamento dos seus dados.</p>
       <div className="actions section-gap">
-        <a className="btn secondary" href={enderecos.exportar('json')}><Download size={16} />Baixar meus dados</a>
+        <BaixarArquivo className="btn secondary"  caminho={enderecos.exportar('json')}><Download size={16} />Baixar meus dados</BaixarArquivo>
         <Botao variante="fantasma" onClick={aoPedir}>Solicitação de privacidade</Botao>
       </div>
       <hr />

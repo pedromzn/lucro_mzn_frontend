@@ -8,6 +8,7 @@
  * dela) — não um novo cálculo que poderia ter mudado entre um clique e outro.
  */
 
+import { BaixarArquivo, ImagemDoEspaco } from '@/components/ArquivosDoEspaco'
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
@@ -237,7 +238,7 @@ export default function Produtos() {
                     />
                   </label>
                   <div className="product-name-cell">
-                    {p.imagemId ? <img className="product-thumb" src={enderecos.imagem(p.imagemId)} alt="" /> : <div className="product-icon"><Package size={20} /></div>}
+                    {p.imagemId ? <ImagemDoEspaco className="product-thumb"  caminho={enderecos.imagem(p.imagemId)} alt="" /> : <div className="product-icon"><Package size={20} /></div>}
                     <div>
                       <button className="product-title" onClick={() => editar(p, '/produtos')}>{p.nome}</button>
                       <small>{p.categoria}{p.exemplo ? ' · Exemplo' : ''}</small>
@@ -303,9 +304,9 @@ export default function Produtos() {
             ['pdf', 'PDF', 'Relatório de preços e composição'],
             ['json', 'Meus dados', 'Catálogo e histórico completo'],
           ] as const).map(([formato, titulo, sub]) => (
-            <a key={formato} href={enderecos.exportar(formato)} className="export-option">
+            <BaixarArquivo key={formato}  caminho={enderecos.exportar(formato)} className="export-option">
               <Download size={20} /><div><strong>{titulo}</strong><span>{sub}</span></div><ArrowRight size={16} />
-            </a>
+            </BaixarArquivo>
           ))}
         </div>
       </Janela>
@@ -342,7 +343,7 @@ export default function Produtos() {
           <div className="form-stack">
             {janela === 'importar' ? (
               <>
-                <a className="text-link" href={enderecos.modeloDeImportacao}>Baixar modelo CSV de importação</a>
+                <BaixarArquivo className="text-link"  caminho={enderecos.modeloDeImportacao}>Baixar modelo CSV de importação</BaixarArquivo>
                 <div className="upload-zone">
                   <Upload size={28} />
                   <label htmlFor="arquivo-de-importacao">Escolha um arquivo CSV ou XLSX (até 1 MB)</label>

@@ -10,6 +10,7 @@
  * de fábrica (`@shared/etiquetas`); não há administrador da MZN dentro do app.
  */
 
+import { BaixarArquivo, ImagemDoEspaco } from '@/components/ArquivosDoEspaco'
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Download, FileJson, ImagePlus, Printer, Search, Tags, Upload } from 'lucide-react'
@@ -252,7 +253,7 @@ export default function Etiquetas() {
               <div className="label-preview" style={{ aspectRatio: `${layout.largura} / ${layout.altura}` }}>
                 {layout.mostrarLoja ? (
                   <div className="label-preview-brand">
-                    {logoId ? <img src={enderecos.imagem(logoId)} alt="" /> : null}
+                    {logoId ? <ImagemDoEspaco  caminho={enderecos.imagem(logoId)} alt="" /> : null}
                     <span>{primeiro.exemplo ? 'EXEMPLO · ' : ''}{nomeDaLoja}</span>
                   </div>
                 ) : null}
@@ -281,7 +282,7 @@ export default function Etiquetas() {
             {geradas.map((g) => (
               <div key={g.id}>
                 <span>{data(g.criadoEm)} · {g.quantidade} etiquetas</span>
-                <a className="btn ghost" href={enderecos.segundaVia(g.id)}><Download size={15} />Baixar novamente</a>
+                <BaixarArquivo className="btn ghost"  caminho={enderecos.segundaVia(g.id)}><Download size={15} />Baixar novamente</BaixarArquivo>
               </div>
             ))}
           </div>

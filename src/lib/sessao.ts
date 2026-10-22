@@ -149,7 +149,7 @@ interface EstadoDaSessao {
   retrato: RetratoDaSessao | null
   espacoAtual: EspacoDaSessao | null
   entrar: (retrato: RetratoDaSessao) => void
-  sair: () => void
+  sair: () => Promise<void>
   trocarEspaco: (id: string) => void
   recarregar: () => Promise<void>
   /** o que a tela pergunta o tempo todo */
@@ -195,18 +195,9 @@ export const useSessao = create<EstadoDaSessao>((set, get) => ({
     set({ retrato: dados, espacoAtual: espaco, carregando: false })
   },
 
-  sair: () => {
-    /*
-     * Avisa o servidor, sempre.
-     *
-     * O cookie é `HttpOnly`: o JavaScript não o apaga, só o servidor. Sem esta
-     * chamada a sessão continuaria de pé — inclusive a prévia em aba nova —
-     * até o cookie vencer. A chamada leva a prova de origem, senão o servidor
-     * recusa (é a defesa contra deslogarem a pessoa de fora).
-     *
-     * Sem `await` de propósito: sair não pode ficar esperando rede.
-     */
-    void fetch('/api/auth/sair', { method: 'POST', headers: cabecalhosDeSessao() }).catch(() => undefined)
+  sair: async () => {
+    /* Só navega depois da revogação: trocar de página pode cancelar o POST. */
+    await pedir('/auth/sair', { method: 'POST' })
     esquecerLocal()
     set({ retrato: null, espacoAtual: null, carregando: false })
   },
@@ -266,7 +257,8 @@ export const useSessao = create<EstadoDaSessao>((set, get) => ({
 
 /** chamado pelo cliente de API quando o servidor recusa o token */
 export function encerrarSessaoPorToken(): void {
-  useSessao.getState().sair()
+  esquecerLocal()
+  useSessao.setState({ retrato: null, espacoAtual: null, carregando: false })
   if (!location.pathname.startsWith('/entrar')) {
     location.href = '/entrar?expirou=1'
   }

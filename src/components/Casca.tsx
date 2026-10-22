@@ -21,7 +21,7 @@ import {
 } from 'lucide-react'
 import { useSessao } from '@/lib/sessao'
 import { usePainel } from '@/lib/painel'
-import { useAviso } from '@/lib/avisos'
+import { toast, useAviso } from '@/lib/avisos'
 import { lucroApi } from '@/lib/api'
 import { useAssinatura } from '@/loja/estadoDaAssinatura'
 import { AvisoDeAssinatura } from '@/loja/AvisoDeAssinatura'
@@ -160,7 +160,7 @@ export function Casca({ children }: { children: ReactNode }) {
           <div className="sidebar-user">
             <span className="avatar">{retrato.usuario.nome.slice(0, 1)}</span>
             <div><strong>{primeiroNome}</strong><small>{statusDaAssinatura}</small></div>
-            <button className="icon-button" aria-label="Sair da conta" onClick={() => { sair(); navegar('/', { replace: true }) }}>
+            <button className="icon-button" aria-label="Sair da conta" onClick={async () => { try { await sair(); navegar('/', { replace: true }) } catch { toast.error('Não foi possível sair. Tente novamente.') } }}>
               <LogOut size={17} />
             </button>
           </div>

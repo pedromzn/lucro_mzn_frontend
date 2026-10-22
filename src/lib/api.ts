@@ -60,7 +60,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 /** Para o que volta ARQUIVO (o PDF de etiquetas): a resposta inteira, para a tela baixar. */
-async function arquivo(path: string, options: RequestInit = {}): Promise<Blob> {
+export async function arquivo(path: string, options: RequestInit = {}): Promise<Blob> {
   return (await pedir(path, options)).blob()
 }
 
@@ -544,11 +544,11 @@ export const lucroApi = {
   },
 }
 
-/* os endereços que o navegador ABRE (download): a sessão vai no cookie */
+/* Caminhos relativos ao cliente autenticado: todo arquivo leva o espaço escolhido. */
 export const enderecos = {
-  imagem: (id: string) => `/api/arquivos/${encodeURIComponent(id)}`,
-  exportar: (formato: 'csv' | 'xlsx' | 'pdf' | 'json') => `/api/exportar?formato=${formato}`,
-  modeloDeImportacao: '/api/importacao/modelo',
-  estoqueEmCsv: '/api/estoque/exportar',
-  segundaVia: (id: string) => `/api/etiquetas/${encodeURIComponent(id)}/pdf`,
+  imagem: (id: string) => `/arquivos/${encodeURIComponent(id)}`,
+  exportar: (formato: 'csv' | 'xlsx' | 'pdf' | 'json') => `/exportar?formato=${formato}`,
+  modeloDeImportacao: '/importacao/modelo',
+  estoqueEmCsv: '/estoque/exportar',
+  segundaVia: (id: string) => `/etiquetas/${encodeURIComponent(id)}/pdf`,
 }

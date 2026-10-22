@@ -5,10 +5,7 @@
  * erro.
  *
  * **Só o Lucro Certo aparece aqui** (PLANO-LUCRO-CERTO.md, D5: cada app é um).
- * Mas o Núcleo trata a lista `aplicativos` como SUBSTITUIÇÃO — o que não vier
- * nela é revogado (`aplicarAcessos`). Então a tela guarda os acessos da pessoa
- * aos outros apps e os devolve intactos: editar alguém aqui não pode tirar o
- * Marketing Flow dela.
+ * O Núcleo altera só as licenças deste app ao receber `x-aplicativo: lucro`.
  *
  * Os espaços de uma pessoa também são por app: marcar aqui mexe só nos espaços
  * do Lucro Certo (o Núcleo filtra pelo `x-aplicativo`).
@@ -26,7 +23,7 @@ import { Aviso, Botao, CampoDeTexto, Janela, Selo, Vazio, erroDe } from '@/compo
 
 const PAPEIS = [
   { id: 'super_admin', nome: 'Responsável', descricao: 'Tudo, inclusive licenças e outros responsáveis' },
-  { id: 'admin', nome: 'Administrador', descricao: 'Gerencia pessoas, espaços e dados da empresa' },
+  { id: 'admin', nome: 'Administrador', descricao: 'Gerencia a empresa e também os outros apps MZN' },
   { id: 'membro', nome: 'Membro', descricao: 'Só os espaços de trabalho que você marcar' },
 ] as const
 type Papel = (typeof PAPEIS)[number]['id']
@@ -40,8 +37,6 @@ interface Rascunho {
   espacos: string[]
   /** o papel no Lucro Certo; `null` = sem acesso a este app */
   papelAqui: string | null
-  /** os acessos aos OUTROS apps, devolvidos como vieram */
-  outrosApps: Array<{ aplicativo: string; papel_no_app: string }>
 }
 
 interface Convite { email: string; link: string; enviado: boolean; motivo: string | null }
@@ -80,19 +75,18 @@ export function Pessoas() {
   const novo = () =>
     setRascunho({
       nome: '', email: '', cargo: '', papel: 'membro', espacos: espacos.filter((e) => e.padrao).map((e) => e.id),
-      papelAqui: assentos && assentos.disponiveis > 0 ? papelPadrao : null, outrosApps: [],
+      papelAqui: assentos && assentos.disponiveis > 0 ? papelPadrao : null,
     })
   const editar = (u: UsuarioDaEmpresa) =>
     setRascunho({
       id: u.id, nome: u.nome, email: u.email, cargo: u.cargo ?? '', papel: u.papel, espacos: u.espacos?.map((e) => e.id) ?? [],
       papelAqui: u.aplicativos.find((a) => a.aplicativo === APLICATIVO)?.papel_no_app ?? null,
-      outrosApps: u.aplicativos.filter((a) => a.aplicativo !== APLICATIVO),
     })
 
   async function salvar() {
     if (!rascunho) return
     setOcupado(true)
-    const aplicativos = [...rascunho.outrosApps, ...(rascunho.papelAqui ? [{ aplicativo: APLICATIVO, papel_no_app: rascunho.papelAqui }] : [])]
+    const aplicativos = (rascunho.papelAqui ? [{ aplicativo: APLICATIVO, papel_no_app: rascunho.papelAqui }] : [])
     const corpo = {
       nome: rascunho.nome.trim(), papel: rascunho.papel, cargo: rascunho.cargo.trim() || null,
       espacos: rascunho.papel === 'membro' ? rascunho.espacos : [], aplicativos,

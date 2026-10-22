@@ -8,6 +8,7 @@
  * vezes.
  */
 
+import { BaixarArquivo } from '@/components/ArquivosDoEspaco'
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowDownLeft, ArrowUpRight, Boxes, Download, History, PackagePlus, Plus, Search, ShoppingBag } from 'lucide-react'
 import { D } from '@shared/preco'
@@ -101,7 +102,7 @@ export default function Estoque() {
           <button className={secao === 'historico' ? 'active' : ''} onClick={() => setSecao('historico')}><History size={16} />Movimentações</button>
         </div>
         <div className="toolbar-actions">
-          <a className="btn ghost" href={enderecos.estoqueEmCsv}><Download size={16} />Exportar estoque</a>
+          <BaixarArquivo className="btn ghost"  caminho={enderecos.estoqueEmCsv}><Download size={16} />Exportar estoque</BaixarArquivo>
           {escreve ? (
             <>
               <Botao variante="secundario" disabled={!produtos.length} onClick={() => abrir(undefined, 'venda')}><ShoppingBag size={16} />Registrar venda</Botao>

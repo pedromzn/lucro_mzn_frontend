@@ -48,3 +48,26 @@ describe('sessão do painel', () => {
     expect(cabecalhosDeSessao()).toEqual({ 'x-aplicativo': 'lucro' })
   })
 })
+
+describe('revogação da sessão', () => {
+  it('aguarda o servidor antes de esquecer o usuário', async () => {
+    let concluir!: (resposta: Response) => void
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => { concluir = resolve })))
+    const { useSessao } = await import('@/lib/sessao')
+    const retrato = { usuario: { id: 'pessoa' } } as any
+    useSessao.setState({ retrato })
+    const saida = useSessao.getState().sair()
+    expect(useSessao.getState().retrato).toBe(retrato)
+    concluir(new Response('{}', { status: 200 }))
+    await saida
+    expect(useSessao.getState().retrato).toBeNull()
+  })
+  it('mantém a sessão local e informa falha quando não revogou', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('sem rede')))
+    const { useSessao } = await import('@/lib/sessao')
+    const retrato = { usuario: { id: 'pessoa' } } as any
+    useSessao.setState({ retrato })
+    await expect(useSessao.getState().sair()).rejects.toThrow('sem rede')
+    expect(useSessao.getState().retrato).toBe(retrato)
+  })
+})
