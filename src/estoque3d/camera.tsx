@@ -67,7 +67,7 @@ export function CameraDoEstoque({ largura, profundidade, controle, ouvintes, red
   const maior = Math.max(largura, profundidade)
   /* o espaço inteiro na proporção da tela: numa tela larga quem manda é a largura, numa estreita a profundidade */
   const proporcao = size.width / Math.max(1, size.height)
-  const inicial = (): Estado => ({ x: 0, z: 0.3, giro: 0.55, inclinacao: 0.92, enquadramento: Math.max(profundidade * 0.78, (largura * 0.95) / proporcao), planta: 0 })
+  const inicial = (): Estado => ({ x: 0, z: 2.1, giro: 0.43, inclinacao: 0.92, enquadramento: Math.max((profundidade + 7.5) * 1.06, ((largura + 3.4) * Math.cos(0.43) + (profundidade + 8.2) * Math.sin(0.43)) * 1.08 / proporcao), planta: 0 })
   const atual = useRef<Estado>(inicial())
   const meta = useRef<Estado>(inicial())
   const olhar = useRef(new Vector3())
@@ -76,13 +76,13 @@ export function CameraDoEstoque({ largura, profundidade, controle, ouvintes, red
   useEffect(() => {
     meta.current = { ...inicial(), planta: meta.current.planta }
     invalidate()
-  }, [largura, profundidade])
+  }, [largura, profundidade, size.width, size.height])
 
   const limitar = (e: Estado) => {
     e.x = Math.max(-largura / 2, Math.min(largura / 2, e.x))
     e.z = Math.max(-profundidade / 2, Math.min(profundidade / 2, e.z))
     e.inclinacao = Math.max(INCLINACAO.minima, Math.min(INCLINACAO.maxima, e.inclinacao))
-    e.enquadramento = Math.max(1.4, Math.min(maior * 1.5, e.enquadramento))
+    e.enquadramento = Math.max(1.4, Math.min(Math.max(maior * 2, (largura + 5) / proporcao * 1.5), e.enquadramento))
   }
 
   if (controle) {

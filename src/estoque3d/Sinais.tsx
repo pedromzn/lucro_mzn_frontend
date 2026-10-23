@@ -4,16 +4,15 @@
  * - **Realce**: a posição apontada ganha um véu, a selecionada um contorno.
  * - **Sinalizadores**: colunas de luz sobre cada posição do produto procurado —
  *   o "localizar" do Warehouse Theatre 3D (MIT).
- * - **Voos**: as caixinhas fazendo arco de um lugar a outro. Pedem quadro só
- *   enquanto voam; parada, a cena volta a não desenhar nada.
+ * A fila de movimentos é consumida por OperacaoAnimada (Assistente e caminhão).
  * - **Projetor**: os rótulos são HTML de verdade (fonte do mock, leitor de
  *   tela, nada de worker por `blob:`, que a CSP recusaria) e se reposicionam a
  *   cada quadro em que a câmera se mexe.
  */
 
-import { useEffect, useLayoutEffect, useMemo, useRef, type MutableRefObject } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
-import { Color, EdgesGeometry, Euler, LineBasicMaterial, Matrix4, MeshBasicMaterial, Quaternion, Vector3, type InstancedMesh } from 'three'
+import { useEffect, useMemo, type MutableRefObject } from 'react'
+import { useThree } from '@react-three/fiber'
+import { Color, EdgesGeometry, LineBasicMaterial, MeshBasicMaterial, Vector3 } from 'three'
 import { MEDIDAS, type Endereco, type Estrutura } from '@shared/enderecos'
 import type { Materiais } from './materiais'
 import type { OuvinteDeQuadro } from './camera'
@@ -81,58 +80,6 @@ export function Sinalizadores({ pontos, mats }: { pontos: Ponto[]; mats: Materia
 /* ── os voos ── */
 
 export interface LevaDeVoos { voos: Voo[]; inicio: number }
-
-const TETO = 64
-const DURACAO = 1100
-const _m = new Matrix4(), _q = new Quaternion(), _e = new Euler(), _p = new Vector3(), _s = new Vector3(), _c = new Color()
-
-export function Voos({ fila, cores, mats, reduzirMovimento }: { fila: MutableRefObject<LevaDeVoos[]>; cores: Map<string, string>; mats: Materiais; reduzirMovimento: boolean }) {
-  const ref = useRef<InstancedMesh>(null)
-  const invalidate = useThree((s) => s.invalidate)
-  useLayoutEffect(() => {
-    if (ref.current) ref.current.count = 0
-  }, [])
-  useFrame(() => {
-    const mesh = ref.current
-    if (!mesh) return
-    /* com movimento reduzido, a leva não anda: a mercadoria simplesmente aparece no lugar novo */
-    if (reduzirMovimento) { fila.current = []; mesh.count = 0; return }
-    const agora = performance.now()
-    let n = 0
-    let ativos = false
-    for (const leva of fila.current) {
-      for (const v of leva.voos) {
-        const t = (agora - leva.inicio - v.atraso) / DURACAO
-        if (t > 1) continue
-        ativos = true
-        if (t < 0) continue
-        const dist = Math.hypot(v.para.x - v.de.x, v.para.z - v.de.z)
-        const arco = 0.6 + dist * 0.18
-        for (let k = 0; k < v.unidades && n < TETO; k++) {
-          const tk = Math.max(0, Math.min(1, t - k * 0.07))
-          const suave = tk * tk * (3 - 2 * tk)
-          _p.set(
-            v.de.x + (v.para.x - v.de.x) * suave,
-            v.de.y + (v.para.y - v.de.y) * suave + Math.sin(Math.PI * suave) * arco,
-            v.de.z + (v.para.z - v.de.z) * suave,
-          )
-          /* nasce e some com um "pulo" de tamanho, como um brinquedo */
-          const escala = 0.28 * Math.min(1, Math.sin(Math.PI * Math.min(1, tk * 1.15)) * 1.6 + 0.15)
-          _m.compose(_p, _q.setFromEuler(_e.set(0, suave * Math.PI, suave * 0.6)), _s.set(escala, escala, escala))
-          mesh.setMatrixAt(n, _m)
-          mesh.setColorAt(n, _c.set(cores.get(v.produtoId) ?? '#cccccc'))
-          n++
-        }
-      }
-    }
-    mesh.count = n
-    mesh.instanceMatrix.needsUpdate = true
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-    if (ativos) invalidate()
-    else if (fila.current.length) fila.current = []
-  })
-  return <instancedMesh ref={ref} args={[mats.geometria.arredondado, mats.de('#ffffff'), TETO]} frustumCulled={false} castShadow />
-}
 
 /* ── os rótulos de HTML ── */
 

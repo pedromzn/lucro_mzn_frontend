@@ -7,8 +7,8 @@
  *
  * **O fluxo anda na tela.** A cada leitura do mapa (depois de uma ação, ou a
  * cada 20 s com a aba visível), a diferença para a leitura anterior vira voos
- * (`voos.ts`): a caixa sai da prateleira e vai para o caixa, chega pela doca e
- * cai no chão do recebimento. Vale para a ação de quem está aqui e para a de
+ * (`voos.ts`): OperacaoAnimada transforma os percursos em tarefas da Assistente,
+ * do recebimento na porta até as posições e a coleta na rua. Vale para a ação de quem está aqui e para a de
  * qualquer outra pessoa do espaço.
  *
  * Toda gravação é do servidor e passa por `agir` (avisa e recarrega o painel);
@@ -16,9 +16,9 @@
  */
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Crosshair, History, Layers, LayoutGrid, LocateFixed, Map as IconeDaPlanta, Rotate3d, X } from 'lucide-react'
+import { Crosshair, Layers, LayoutGrid, LocateFixed, Map as IconeDaPlanta, Rotate3d, Pause, Play, SkipForward, UserRound, X } from 'lucide-react'
 import { NOMES_DAS_ZONAS, conferirEstrutura, retanguloDa, rotuloDoEndereco, sobrepoe, type Endereco, type Tema } from '@shared/enderecos'
-import { NOMES_DOS_MOVIMENTOS, rotuloDaQuantidade, type TipoDeMovimento } from '@shared/estoque'
+import { rotuloDaQuantidade } from '@shared/estoque'
 import { lucroApi, type MapaDoEstoque, type PosicaoNoMapa } from '@/lib/api'
 import { agir, usePainel } from '@/lib/painel'
 import { toast } from '@/lib/avisos'
@@ -34,10 +34,10 @@ import { centroNoMundo, lugaresDoEspaco, pontoDoChao } from './lugares'
 import { Palco } from './Palco'
 import { PainelDoEspaco, type Selecao as SelecaoDoPainel } from './PainelDoEspaco'
 import { celulaDa, type AlvoDeRotulo, type LevaDeVoos } from './Sinais'
-import { voosDaDiferenca, voosDoMovimento } from './voos'
+import { voosDaDiferenca } from './voos'
+import type { EstadoDaOperacao } from './OperacaoAnimada'
 
 const ATUALIZAR_A_CADA = 20_000
-const MOVIMENTOS_DO_REPLAY = 12
 
 function usePrefereMenosMovimento(): boolean {
   const [reduzir, setReduzir] = useState(() => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
@@ -53,7 +53,7 @@ function usePrefereMenosMovimento(): boolean {
 
 const mesmo = (a: Endereco | null, b: Endereco | null) => !!a && !!b && a.estruturaId === b.estruturaId && a.nivel === b.nivel && a.vao === b.vao
 
-export default function EspacoDoEstoque({ aoMudar }: { aoMudar: () => void }) {
+export default function EspacoDoEstoque({ aoMudar, atualizacao = 0 }: { aoMudar: () => void; atualizacao?: number }) {
   const estado = usePainel((s) => s.estado)!
   const escreve = estado.podeEscrever
   const reduzirMovimento = usePrefereMenosMovimento()
@@ -68,7 +68,9 @@ export default function EspacoDoEstoque({ aoMudar }: { aoMudar: () => void }) {
   const [pedido, setPedido] = useState<Pedido | null>(null)
   /* "clique na posição de destino": o pedido de mudança espera o clique no mapa */
   const [escolhendoDestino, setEscolhendoDestino] = useState<Extract<Pedido, { tipo: 'mover' }> | null>(null)
-  const [legenda, setLegenda] = useState('')
+  const [operacao, setOperacao] = useState<EstadoDaOperacao>({ texto: '', ativa: false, pendentes: 0 })
+  const [animacaoPausada, setAnimacaoPausada] = useState(false)
+  const [reinicioDaAnimacao, setReinicioDaAnimacao] = useState(0)
   /* o editor da planta (fatia 6): a estrutura em edição e a que está sendo arrastada */
   const [editando, setEditando] = useState(false)
   const [editada, setEditada] = useState<string | null>(null)
@@ -87,11 +89,11 @@ export default function EspacoDoEstoque({ aoMudar }: { aoMudar: () => void }) {
 
   const controle = useRef<ControleDaCamera | null>(null)
   const voos = useRef<LevaDeVoos[]>([])
+  const posicaoDaAssistente = useRef({ x: 0, y: 0, z: 0 })
   const ouvintes = useRef(new Set<OuvinteDeQuadro>())
   const alvos = useRef<AlvoDeRotulo[]>([])
   const elementos = useRef(new Map<string, HTMLElement>())
   const anterior = useRef<MapaDoEstoque | null>(null)
-  const relogios = useRef<number[]>([])
   /* cada leitura do mapa leva um número; a que chega depois de uma mais nova é descartada */
   const leitura = useRef(0)
 
@@ -104,8 +106,20 @@ export default function EspacoDoEstoque({ aoMudar }: { aoMudar: () => void }) {
       if (minha !== leitura.current) return
       const antes = anterior.current
       if (animar && antes?.ambiente && novo.ambiente && antes.ambiente.revisao === novo.ambiente.revisao) {
-        const leva = voosDaDiferenca(antes, novo, lugaresDoEspaco(novo.estruturas, novo.ambiente))
+        const lugares = lugaresDoEspaco(novo.estruturas, novo.ambiente)
+        const conhecidos = new Set(antes.movimentos.map(m => m.id))
+        const recentes = novo.movimentos.filter(m => !conhecidos.has(m.id))
+        const leva = voosDaDiferenca(antes, novo, lugares).map(v => {
+          const saidas = recentes.filter(m => m.produtoId === v.produtoId && Number(m.quantidade) < 0)
+          return v.operacao === 'entregar' && saidas.length && saidas.every(m => m.tipo !== 'venda')
+            ? { ...v, operacao: 'retirar' as const, para: { ...lugares.entrada, x: lugares.entrada.x + 0.8 } }
+            : v
+        })
         if (leva.length) voos.current = [...voos.current, { voos: leva, inicio: performance.now() }]
+      }
+      if (antes?.ambiente?.revisao !== novo.ambiente?.revisao) {
+        voos.current = []
+        setReinicioDaAnimacao(v => v + 1)
       }
       anterior.current = novo
       setMapa(novo)
@@ -115,7 +129,7 @@ export default function EspacoDoEstoque({ aoMudar }: { aoMudar: () => void }) {
     }
   }, [])
 
-  useEffect(() => { void carregar(false) }, [carregar])
+  useEffect(() => { void carregar(anterior.current !== null) }, [carregar, atualizacao])
 
   /* o fluxo de quem mais está trabalhando no espaço: relê enquanto a aba está à vista e ninguém está no meio de uma ação */
   const ocupadoComAcao = !!pedido || !!escolhendoDestino || editando
@@ -126,7 +140,6 @@ export default function EspacoDoEstoque({ aoMudar }: { aoMudar: () => void }) {
     return () => clearInterval(relogio)
   }, [carregar, ocupadoComAcao])
 
-  useEffect(() => () => { for (const r of relogios.current) clearTimeout(r) }, [])
 
   useEffect(() => { controle.current?.planta(planta) }, [planta])
   /* organizar é olhar de cima, e o botão esquerdo passa a ser das estruturas */
@@ -273,25 +286,6 @@ export default function EspacoDoEstoque({ aoMudar }: { aoMudar: () => void }) {
     setSelecao({ tipo: 'posicao', endereco })
   }
 
-  const replay = () => {
-    if (!mapa?.ambiente) return
-    for (const r of relogios.current) clearTimeout(r)
-    const lugares = lugaresDoEspaco(mapa.estruturas, mapa.ambiente)
-    const ultimos = [...mapa.movimentos].slice(0, MOVIMENTOS_DO_REPLAY).reverse()
-    if (!ultimos.length) { setLegenda('Ainda não há movimentações para mostrar.'); return }
-    const passo = reduzirMovimento ? 1600 : 900
-    const leva = ultimos.flatMap((m, i) => voosDoMovimento(m, lugares, i * passo))
-    voos.current = [...voos.current, { voos: leva, inicio: performance.now() }]
-    controle.current?.redesenhar()
-    relogios.current = ultimos.map((m, i) => window.setTimeout(() => {
-      const p = porProduto.get(m.produtoId)
-      const quando = new Date(m.criadoEm).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-      const q = m.tipo === 'transferencia' ? (m.linhas.find((l) => Number(l.quantidade) > 0)?.quantidade ?? m.linhas[0]?.quantidade ?? '0') : m.quantidade
-      setLegenda(`${quando} · ${NOMES_DOS_MOVIMENTOS[m.tipo as TipoDeMovimento] ?? m.tipo} · ${p?.nome ?? 'Produto'} · ${quantidade(Math.abs(Number(q)))} ${p?.unidade ?? ''}`)
-    }, i * passo))
-    relogios.current.push(window.setTimeout(() => setLegenda(''), ultimos.length * passo + 1500))
-  }
-
   /* o editor: clicar escolhe a estrutura; arrastar muda o lugar dela, com encaixe de 10 cm, e grava ao soltar */
   const encaixe = (v: number) => Math.round(v * 10) / 10
   const eventosDoEditor = {
@@ -329,7 +323,7 @@ export default function EspacoDoEstoque({ aoMudar }: { aoMudar: () => void }) {
       cores={cores}
       aoFechar={() => setSelecao(null)}
       aoPedir={(p) => setPedido(p)}
-      aoProcurar={procurar}
+      aoVerOChao={() => { setPlanta(false); setSelecao({ tipo: 'chao' }) }}
       aoSelecionar={(endereco) => { setSelecao({ tipo: 'posicao', endereco }); const e = porEstrutura.get(endereco.estruturaId); if (e) { const c = centroNoMundo(e, endereco.nivel, endereco.vao); controle.current?.voarPara(c.x, c.z) } }}
     />
   )
@@ -373,8 +367,8 @@ export default function EspacoDoEstoque({ aoMudar }: { aoMudar: () => void }) {
           <button className={planta ? '' : 'active'} onClick={() => setPlanta(false)}><Rotate3d size={16} />3D</button>
           <button className={planta ? 'active' : ''} onClick={() => setPlanta(true)}><IconeDaPlanta size={16} />Planta</button>
         </div>
-        <Botao variante="fantasma" onClick={replay}><History size={16} />Ver o movimento</Botao>
         {escreve ? <Botao variante={editando ? 'primario' : 'fantasma'} onClick={() => { setEditando(!editando); setEditada(null); setSelecao(null) }}><LayoutGrid size={16} />{editando ? 'Organizando…' : 'Organizar o espaço'}</Botao> : null}
+        <Botao variante="fantasma" aria-label="Aproximar da Assistente" title="Aproximar da Assistente" onClick={() => { setPlanta(false); controle.current?.voarPara(posicaoDaAssistente.current.x, posicaoDaAssistente.current.z, 4.5) }}><UserRound size={16} /></Botao>
         <Botao variante="fantasma" onClick={() => controle.current?.inicio()} aria-label="Voltar ao enquadramento inicial"><Crosshair size={16} /></Botao>
       </div>
 
@@ -399,6 +393,10 @@ export default function EspacoDoEstoque({ aoMudar }: { aoMudar: () => void }) {
           aoClicarNoVazio={() => { if (!escolhendoDestino) setSelecao(null) }}
           controle={controle}
           voos={voos}
+          animacaoPausada={animacaoPausada || editando}
+          reinicioDaAnimacao={reinicioDaAnimacao}
+          posicaoDaAssistente={posicaoDaAssistente}
+          aoEstadoDaAnimacao={setOperacao}
           rotulos={{ ouvintes, alvos, elementos }}
           reduzirMovimento={reduzirMovimento}
         />
@@ -416,7 +414,13 @@ export default function EspacoDoEstoque({ aoMudar }: { aoMudar: () => void }) {
             <Botao variante="fantasma" onClick={() => setEscolhendoDestino(null)}>Cancelar</Botao>
           </div>
         ) : null}
-        {legenda ? <div className="space-caption" role="status"><History size={15} />{legenda}</div> : null}
+        {operacao.texto && !editando ? <div className="space-operation">
+          <div role="status" aria-live="polite"><span className={`space-operation-dot${operacao.ativa ? ' active' : ''}`} /><span>{animacaoPausada && operacao.ativa ? 'Animação pausada' : operacao.texto}{operacao.produtoId && !operacao.texto.includes(' · ') ? ` · ${porProduto.get(operacao.produtoId)?.nome ?? 'Produto'}` : ''}{operacao.pendentes ? <small>{operacao.pendentes} na fila</small> : null}</span></div>
+          {operacao.ativa ? <div className="space-operation-actions">
+            <button className="icon-button" aria-label={animacaoPausada ? 'Continuar animação' : 'Pausar animação'} onClick={() => setAnimacaoPausada(v => !v)}>{animacaoPausada ? <Play size={16} /> : <Pause size={16} />}</button>
+            <button className="icon-button" aria-label="Encerrar animação" onClick={() => { voos.current = []; setReinicioDaAnimacao(v => v + 1); setAnimacaoPausada(false) }}><SkipForward size={16} /></button>
+          </div> : null}
+        </div> : null}
         {MODOS_DE_COR[modoDeCor].legenda.length ? (
           <ul className="space-legend" aria-label={`Legenda: ${MODOS_DE_COR[modoDeCor].nome}`}>
             {MODOS_DE_COR[modoDeCor].legenda.map(([cor, texto]) => <li key={texto}><i style={{ background: cor }} />{texto}</li>)}

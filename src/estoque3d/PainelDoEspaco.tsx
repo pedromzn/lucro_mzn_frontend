@@ -3,36 +3,40 @@
  *
  * Três estados: uma POSIÇÃO selecionada (cada produto dela por inteiro, com
  * foto, e o que dá para fazer dali), o monte "A GUARDAR" (o que chegou e
- * ainda não tem lugar) e NADA selecionado (o resumo do espaço e a fila de
- * tarefas). Os dois primeiros flutuam sobre a cena, à direita; o resumo é a
+ * ainda não tem lugar) e NADA selecionado (o resumo do espaço). Os dois primeiros flutuam sobre a cena, à direita; o resumo é a
  * faixa acima dela. As peças são as de `components/ui.tsx`; quem é leitor vê
  * tudo e não vê os botões que gravam.
+ *
+ * Sem fila de tarefas desde 22/10/2026 (pedido do Pedro): "guardar", "levar
+ * para a loja" e "comprar" eram sugestão de jogo. O espaço é o retrato do
+ * estoque — onde está cada coisa, e a conferência —, não uma lista de afazeres.
  */
 
-import { ArrowLeftRight, ClipboardCheck, PackagePlus, PackageSearch, ShoppingBag, Store, Truck, X } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowLeftRight, ClipboardCheck, LocateFixed, PackagePlus, PackageSearch, Search, ShoppingBag, X } from 'lucide-react'
 import { D } from '@shared/preco'
 import { rotuloDaQuantidade } from '@shared/estoque'
-import { MEDIDAS, NOMES_DAS_ZONAS, NOMES_DOS_TIPOS, rotuloDoEndereco, type Endereco, type Tarefa } from '@shared/enderecos'
+import { MEDIDAS, NOMES_DAS_ZONAS, NOMES_DOS_TIPOS, rotuloDoEndereco, type Endereco } from '@shared/enderecos'
 import { enderecos, type MapaDoEstoque, type PosicaoNoMapa, type ProdutoNoMapa } from '@/lib/api'
 import { usePainel } from '@/lib/painel'
 import { ImagemDoEspaco } from '@/components/ArquivosDoEspaco'
 import { novoFormulario } from '@/components/FormularioDeMovimento'
-import { Botao, Selo, brl, novaChave, quantidade } from '@/components/ui'
+import { Botao, brl, novaChave, quantidade } from '@/components/ui'
+import { Paginacao, usePaginacao } from '@/components/Paginacao'
 import type { Pedido } from './JanelasDoEspaco'
 
 export type Selecao = { tipo: 'posicao'; endereco: Endereco } | { tipo: 'chao' } | null
 
-const ICONE_DA_TAREFA = { guardar: PackageSearch, expor: Store, repor: Truck } as const
-
-export function PainelDoEspaco({ mapa, selecao, escreve, cores, aoFechar, aoPedir, aoProcurar, aoSelecionar }: {
+export function PainelDoEspaco({ mapa, selecao, escreve, cores, aoFechar, aoPedir, aoSelecionar, aoVerOChao }: {
   mapa: MapaDoEstoque
   selecao: Selecao
   escreve: boolean
   cores: Map<string, string>
   aoFechar: () => void
   aoPedir: (p: Pedido) => void
-  aoProcurar: (produtoId: string) => void
   aoSelecionar: (e: Endereco) => void
+  /** a linha "a guardar" da tabela abre o monte do recebimento */
+  aoVerOChao: () => void
 }) {
   const catalogo = usePainel((s) => s.estado!.produtos)
   const tema = mapa.ambiente!.tema
@@ -175,80 +179,122 @@ export function PainelDoEspaco({ mapa, selecao, escreve, cores, aoFechar, aoPedi
     )
   }
 
-  /* nada selecionado: o resumo e a fila */
+  /* nada selecionado: o resumo */
   const valor = mapa.produtos.reduce((s, p) => s.plus(p.valorEmEstoque), D(0))
   const unidades = mapa.produtos.reduce((s, p) => s.plus(p.quantidade), D(0))
   const aGuardar = mapa.produtos.reduce((s, p) => s.plus(p.aGuardar), D(0))
   const lugares = mapa.estruturas.filter((e) => e.tipo !== 'balcao').reduce((s, e) => s + e.niveis * e.vaos, 0)
   const ocupadas = new Set(mapa.posicoes.map((p) => `${p.estruturaId}:${p.nivel}:${p.vao}`)).size
-  const fazer = (t: Tarefa) => {
-    const p = porProduto.get(t.produtoId)
-    if (!p) return
-    if (t.tipo === 'guardar') mover(p.id, null, null, p.aGuardar)
-    else if (t.tipo === 'repor') movimento(p.id, 'entrada', null, undefined, ['entrada'])
-    else {
-      /* expor: sai de onde há mais, fora da loja — o depósito, ou o chão */
-      const zonaDe = new Map(mapa.estruturas.map((e) => [e.id, e.zona]))
-      const fonte = mapa.posicoes
-        .filter((x) => x.produtoId === p.id && zonaDe.get(x.estruturaId) !== 'loja' && zonaDe.get(x.estruturaId) !== 'expedicao')
-        .sort((a, b) => Number(b.quantidade) - Number(a.quantidade))[0]
-      mover(p.id, fonte ? { estruturaId: fonte.estruturaId, nivel: fonte.nivel, vao: fonte.vao } : null, null, fonte?.quantidade ?? p.aGuardar)
-    }
-  }
   /* o resumo é o cartão de sempre, só que EM CIMA da cena (22/10/2026): ela fica com a largura toda */
   return (
     <section className="panel space-side space-overview" aria-label="Resumo do espaço">
-      <div className="space-overview-col">
-        <h3>O seu espaço</h3>
-        <dl className="space-summary">
-          <div><dt>Valor em estoque</dt><dd>{brl(valor.toFixed(2))}</dd></div>
-          <div><dt>Unidades</dt><dd>{quantidade(unidades.toString())}</dd></div>
-          <div><dt>Posições ocupadas</dt><dd>{ocupadas} de {lugares}</dd></div>
-          <div><dt>A guardar</dt><dd>{quantidade(aGuardar.toString())}</dd></div>
-        </dl>
-      </div>
-      <div className="space-overview-col">
-        <div className="between">
-          <h3>Tarefas</h3>
-          {mapa.tarefas.length ? <Selo tom="roxo">{mapa.tarefas.length}</Selo> : null}
-        </div>
-        <div className="space-tasks">
-          {mapa.tarefas.length ? mapa.tarefas.map((t) => {
-            const Icone = ICONE_DA_TAREFA[t.tipo]
-            return (
-              <article key={`${t.tipo}:${t.produtoId}`} className={`space-task ${t.tipo}`}>
-                <Icone size={17} />
-                <div>
-                  <strong>{t.titulo}</strong>
-                  <small>{t.detalhe}</small>
-                  <div className="space-item-actions">
-                    {escreve ? <Botao variante="secundario" onClick={() => fazer(t)}>{t.tipo === 'guardar' ? 'Guardar' : t.tipo === 'expor' ? 'Levar' : 'Registrar entrada'}</Botao> : null}
-                    <Botao variante="fantasma" onClick={() => aoProcurar(t.produtoId)}>Ver no mapa</Botao>
-                  </div>
-                </div>
-              </article>
-            )
-          }) : <p className="muted small">Nada pendente: tudo guardado, a loja abastecida e nenhum produto no mínimo.</p>}
-        </div>
-        {mapa.posicoes.length === 0 && mapa.estruturas.length ? (
-          <p className="small muted section-gap">
-            Dica: clique numa {NOMES_DOS_TIPOS[tema].estante.toLowerCase()} e use “Guardar aqui” — ou comece pelo monte “A guardar”, no chão do recebimento.
-            Cada {NOMES_DOS_TIPOS[tema].estante.toLowerCase()} tem {MEDIDAS.estante.niveis.padrao} níveis por padrão.
-          </p>
-        ) : null}
-        {/* atalho para quem navega por teclado: as posições ocupadas, em lista */}
-        {mapa.posicoes.length ? (
-          <details className="space-a11y">
-            <summary>Posições ocupadas, em lista</summary>
-            <ul>
-              {[...new Map(mapa.posicoes.map((p) => [`${p.estruturaId}:${p.nivel}:${p.vao}`, p])).values()].slice(0, 200).map((p) => {
-                const e = mapa.estruturas.find((x) => x.id === p.estruturaId)
-                return e ? <li key={`${p.estruturaId}:${p.nivel}:${p.vao}`}><button className="text-link" onClick={() => aoSelecionar(p)}>{rotuloDoEndereco(e, p.nivel, p.vao)}</button></li> : null
-              })}
-            </ul>
-          </details>
-        ) : null}
-      </div>
+      <h3>O seu espaço</h3>
+      <dl className="space-summary">
+        <div><dt>Valor em estoque</dt><dd>{brl(valor.toFixed(2))}</dd></div>
+        <div><dt>Unidades</dt><dd>{quantidade(unidades.toString())}</dd></div>
+        <div><dt>Posições ocupadas</dt><dd>{ocupadas} de {lugares}</dd></div>
+        <div><dt>A guardar</dt><dd>{quantidade(aGuardar.toString())}</dd></div>
+      </dl>
+      {mapa.posicoes.length === 0 && mapa.estruturas.length ? (
+        <p className="small muted">
+          Dica: clique numa {NOMES_DOS_TIPOS[tema].estante.toLowerCase()} e use “Guardar aqui” — ou comece pelo monte “A guardar”, no chão do recebimento.
+          Cada {NOMES_DOS_TIPOS[tema].estante.toLowerCase()} tem {MEDIDAS.estante.niveis.padrao} níveis por padrão.
+        </p>
+      ) : null}
+      <OndeEstaCadaItem mapa={mapa} cores={cores} aoSelecionar={aoSelecionar} aoVerOChao={aoVerOChao} />
     </section>
   )
 }
+
+/**
+ * "Onde está cada item" — a resposta em lista, na linha inteira, logo abaixo
+ * dos números (22/10/2026, pedido do Pedro: "tá difícil achar onde estão os
+ * itens"). Era um "Posições ocupadas, em lista" fechado, que só dizia o nome
+ * da posição. Agora é uma linha por produto em cada lugar — o que está no
+ * recebimento sem posição incluído —, com busca por produto, código ou
+ * posição, e "Ver no 3D" leva a câmera até lá. Vale também para quem navega
+ * por teclado, que era o motivo da lista antiga.
+ */
+function OndeEstaCadaItem({ mapa, cores, aoSelecionar, aoVerOChao }: {
+  mapa: MapaDoEstoque
+  cores: Map<string, string>
+  aoSelecionar: (endereco: Endereco) => void
+  aoVerOChao: () => void
+}) {
+  const [busca, setBusca] = useState('')
+  const { pagina, setPagina, porPagina, setPorPagina } = usePaginacao('onde-esta', 10)
+  const porProduto = new Map(mapa.produtos.map((p) => [p.id, p]))
+  const porEstrutura = new Map(mapa.estruturas.map((e) => [e.id, e]))
+
+  type Linha = { chave: string; produto: ProdutoNoMapa; lugar: string; zona: string; quanto: string; endereco: Endereco | null }
+  const linhas: Linha[] = []
+  for (const pos of mapa.posicoes) {
+    const produto = porProduto.get(pos.produtoId)
+    const e = porEstrutura.get(pos.estruturaId)
+    if (!produto || !e) continue
+    linhas.push({
+      chave: `${pos.estruturaId}:${pos.nivel}:${pos.vao}:${pos.produtoId}`, produto, lugar: rotuloDoEndereco(e, pos.nivel, pos.vao),
+      zona: NOMES_DAS_ZONAS[e.zona], quanto: pos.quantidade, endereco: { estruturaId: pos.estruturaId, nivel: pos.nivel, vao: pos.vao },
+    })
+  }
+  for (const produto of mapa.produtos) {
+    if (D(produto.aGuardar).gt(0)) linhas.push({ chave: `chao:${produto.id}`, produto, lugar: 'A guardar (sem posição)', zona: NOMES_DAS_ZONAS.recebimento, quanto: produto.aGuardar, endereco: null })
+  }
+  if (!linhas.length) return null
+
+  const termo = achatar(busca)
+  const achadas = linhas
+    .filter((l) => !termo || achatar(`${l.produto.nome} ${l.produto.sku ?? ''} ${l.lugar} ${l.zona}`).includes(termo))
+    .sort((a, b) => a.produto.nome.localeCompare(b.produto.nome, 'pt-BR') || a.lugar.localeCompare(b.lugar, 'pt-BR', { numeric: true }))
+  const paginas = Math.max(1, Math.ceil(achadas.length / porPagina))
+  const atual = Math.min(pagina, paginas)
+  const visiveis = achadas.slice((atual - 1) * porPagina, atual * porPagina)
+
+  return (
+    <div className="space-where">
+      <div className="between">
+        <div>
+          <h3>Onde está cada item</h3>
+          <small className="muted">Um produto por lugar. “Ver no 3D” leva a câmera até a posição.</small>
+        </div>
+        <label className="search space-where-search">
+          <Search size={16} />
+          <input type="search" aria-label="Buscar item ou posição" placeholder="Buscar produto, código ou posição" value={busca} onChange={(e) => { setBusca(e.target.value); setPagina(1) }} />
+        </label>
+      </div>
+      {visiveis.length ? (
+        <div className="space-where-table">
+          <table>
+            <thead><tr><th>Produto</th><th>Onde está</th><th>Área</th><th className="num">Quantidade</th><th aria-label="Ações" /></tr></thead>
+            <tbody>
+              {visiveis.map((l) => (
+                <tr key={l.chave}>
+                  <td>
+                    <span className="space-where-produto">
+                      <span className="space-dot" style={{ background: cores.get(l.produto.id) }} />
+                      <strong>{l.produto.nome}</strong>
+                      {l.produto.sku ? <small className="muted">{l.produto.sku}</small> : null}
+                    </span>
+                  </td>
+                  <td>{l.lugar}</td>
+                  <td className="muted">{l.zona}</td>
+                  <td className="num">{rotuloDaQuantidade(l.quanto, l.produto.unidade)}</td>
+                  <td className="acao">
+                    <Botao variante="fantasma" onClick={() => { if (l.endereco) aoSelecionar(l.endereco); else aoVerOChao(); irParaACena() }}><LocateFixed size={15} />Ver no 3D</Botao>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : <p className="muted small">Nada encontrado para “{busca}”.</p>}
+      <Paginacao pagina={atual} porPagina={porPagina} total={achadas.length} aoMudarPagina={setPagina} aoMudarPorPagina={setPorPagina} rotulo="itens" />
+    </div>
+  )
+}
+
+/* a cena fica abaixo da tabela: sem rolar, o clique selecionava lá embaixo e a pessoa não via nada acontecer */
+const irParaACena = () => document.querySelector('.space-toolbar')?.scrollIntoView({ behavior: 'instant', block: 'start' })
+
+/* sem acento e sem caixa: "camisa azul" acha "Camisa Azul" e "prateleira 2" acha "Prateleira 2 · nível 1" */
+const achatar = (texto: string) => texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()

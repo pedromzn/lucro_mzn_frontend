@@ -6,9 +6,9 @@ it('envia o espaço em fotos e em todos os downloads', async () => {
   const buscar = vi.fn().mockImplementation(() => Promise.resolve(new Response('arquivo')))
   vi.stubGlobal('fetch', buscar)
   const { arquivo, enderecos } = await import('@/lib/api')
-  const caminhos = [enderecos.imagem('foto'), ...(['csv', 'xlsx', 'pdf', 'json'] as const).map(enderecos.exportar), enderecos.modeloDeImportacao, enderecos.estoqueEmCsv]
+  const caminhos = [enderecos.imagem('foto'), ...(['csv', 'xlsx', 'pdf', 'json'] as const).map(enderecos.exportar), enderecos.modeloDeImportacao('csv'), enderecos.modeloDeImportacao('xlsx'), enderecos.errosDaImportacao('imp_x'), enderecos.estoqueEmCsv]
   for (const caminho of caminhos) await arquivo(caminho)
-  expect(buscar).toHaveBeenCalledTimes(7)
+  expect(buscar).toHaveBeenCalledTimes(9)
   for (const [url, opcoes] of buscar.mock.calls) {
     expect(url).toMatch(/^\/api\//)
     expect(opcoes.headers['x-workspace-id']).toBe('ws_loja_b')

@@ -1,15 +1,17 @@
 /**
  * Produtos — o catálogo do mock (`catalog.tsx`), com a mesma marcação: busca,
- * filtros salvos, tabela ou cartões, seleção, lote, importação, exportação e
- * histórico. Editar abre a janela de edição rápida (`EditarProduto`), e o
- * arquivado sem movimento nem venda pode ser apagado de vez.
+ * filtros salvos, tabela ou cartões, seleção, lote, exportação e histórico.
+ * Editar abre a janela de edição rápida (`EditarProduto`), e o arquivado sem
+ * movimento nem venda pode ser apagado de vez. Importar é página própria
+ * (`ImportarProdutos`, a do MKT) desde 22/10/2026.
  *
- * Lote e importação são em DOIS tempos, como no mock: a prévia é calculada e
- * guardada no servidor, e confirmar aplica exatamente aquela prévia (pelo id
- * dela) — não um novo cálculo que poderia ter mudado entre um clique e outro.
+ * O lote é em DOIS tempos, como no mock: a prévia é calculada e guardada no
+ * servidor, e confirmar aplica exatamente aquela prévia (pelo id dela) — não
+ * um novo cálculo que poderia ter mudado entre um clique e outro.
  */
 
 import { BaixarArquivo, ImagemDoEspaco } from '@/components/ArquivosDoEspaco'
+import { Paginacao, usePaginacao } from '@/components/Paginacao'
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
@@ -21,29 +23,24 @@ import { toast } from '@/lib/avisos'
 import { Aviso, Botao, CampoDeTexto, CampoNumero, Janela, Selecao, Selo, Vazio, brl, data, erroDe, pct, Combo } from '@/components/ui'
 import { EditarProduto } from '@/components/EditarProduto'
 import { avaliacaoDe, useEditarProduto } from './Inicio'
+import { ROTULO_DA_SITUACAO, SITUACOES, TOM_DA_SITUACAO, situacaoDoPreco, type SituacaoDoPreco } from '@/precos/situacao'
 
-const POR_PAGINA = 12
 type TipoDeRegra = 'meta' | 'aumentoDoCusto' | 'embalagem' | 'arredondamento' | 'canalId'
-type Janelas = 'importar' | 'lote' | 'exportar' | 'historico' | 'filtro' | null
-
-/** O XLSX vai em base64 no corpo JSON; o CSV, como texto. */
-const lerArquivo = (arquivo: File): Promise<string> =>
-  new Promise((resolver, recusar) => {
-    const leitor = new FileReader()
-    leitor.onload = () => resolver(String(leitor.result).split(',')[1])
-    leitor.onerror = recusar
-    leitor.readAsDataURL(arquivo)
-  })
+type Janelas = 'lote' | 'exportar' | 'historico' | 'filtro' | null
 
 export default function Produtos() {
   const estado = usePainel((s) => s.estado)!
   const navegar = useNavigate()
   const editar = useEditarProduto()
-  const destaque = (useLocation().state as { destaque?: string } | null)?.destaque
+  const chegada = useLocation().state as { destaque?: string; situacao?: SituacaoDoPreco } | null
+  const destaque = chegada?.destaque
   const [busca, setBusca] = useState('')
   const [status, setStatus] = useState<'ativo' | 'arquivado' | 'todos'>('ativo')
+  /* a pergunta do app: onde estou perdendo? (PLANO-USABILIDADE-LUCRO.md, U2) */
+  /* vindo de um cartão da Visão geral, a lista já abre no recorte dele */
+  const [situacao, setSituacao] = useState<SituacaoDoPreco | ''>(chegada?.situacao ?? '')
   const [categoria, setCategoria] = useState('')
-  const [ordem, setOrdem] = useState<'recentes' | 'nome' | 'margem'>('recentes')
+  const [ordem, setOrdem] = useState<'recentes' | 'nome' | 'margem' | 'sobra'>('recentes')
   const [vista, setVista] = useState<'tabela' | 'cartoes'>('tabela')
   const [selecao, setSelecao] = useState<string[]>([])
   const [janela, setJanela] = useState<Janelas>(null)
@@ -53,29 +50,30 @@ export default function Produtos() {
   const [ocupado, setOcupado] = useState(false)
   const [regra, setRegra] = useState({ meta: '25', aumentoDoCusto: '0', embalagem: '0', arredondamento: 'nenhum', canalId: '' })
   const [tipoDeRegra, setTipoDeRegra] = useState<TipoDeRegra>('meta')
-  const [duplicados, setDuplicados] = useState<'ignorar' | 'atualizar'>('ignorar')
-  const [arquivo, setArquivo] = useState<File | null>(null)
   const [ultimoLote, setUltimoLote] = useState<string | null>(null)
   const [arquivando, setArquivando] = useState<Produto | null>(null)
   const [editando, setEditando] = useState<Produto | null>(null)
   const [apagando, setApagando] = useState<Produto | null>(null)
-  const [pagina, setPagina] = useState(1)
+  /* a paginação do MKT; o catálogo vem inteiro em `/api/estado` (até 2.000), então a página é cortada aqui */
+  const { pagina, setPagina, porPagina, setPorPagina } = usePaginacao('produtos')
   const escreve = estado.podeEscrever
 
   const termo = busca.toLowerCase()
   const produtos = estado.produtos
-    .filter((p) => (status === 'todos' || p.status === status) && (!categoria || p.categoria === categoria))
+    .filter((p) => (status === 'todos' || p.status === status) && (!categoria || p.categoria === categoria) && (!situacao || situacaoDoPreco(p) === situacao))
     .filter((p) => `${p.nome} ${p.sku ?? ''} ${p.tags.join(' ')}`.toLowerCase().includes(termo))
     .sort((a, b) =>
       ordem === 'nome'
         ? a.nome.localeCompare(b.nome, 'pt-BR')
         : ordem === 'margem'
           ? Number(avaliacaoDe(a)?.margem ?? 0) - Number(avaliacaoDe(b)?.margem ?? 0)
+          : ordem === 'sobra'
+            ? Number(a.calculo?.atual?.lucro ?? Infinity) - Number(b.calculo?.atual?.lucro ?? Infinity)
           : Date.parse(b.atualizadoEm) - Date.parse(a.atualizadoEm),
     )
-  const paginas = Math.max(1, Math.ceil(produtos.length / POR_PAGINA))
+  const paginas = Math.max(1, Math.ceil(produtos.length / porPagina))
   const atual = Math.min(pagina, paginas)
-  const visiveis = produtos.slice((atual - 1) * POR_PAGINA, atual * POR_PAGINA)
+  const visiveis = produtos.slice((atual - 1) * porPagina, atual * porPagina)
   const etiquetar = (ids: string[]) => navegar('/etiquetas', { state: { ids } })
   const acao = (p: Produto, qual: 'duplicar' | 'arquivar' | 'restaurar' | 'favorito', sucesso?: string) =>
     agir(() => lucroApi.acaoNoProduto(p.id, qual), sucesso)
@@ -87,23 +85,6 @@ export default function Produtos() {
       setJanela('historico')
     } catch (e) {
       toast(erroDe(e))
-    }
-  }
-
-  async function lerImportacao() {
-    if (!arquivo) {
-      toast('Escolha um arquivo CSV ou XLSX.')
-      return
-    }
-    setOcupado(true)
-    try {
-      const formato = arquivo.name.toLowerCase().endsWith('.xlsx') ? 'xlsx' : 'csv'
-      const conteudo = formato === 'csv' ? await arquivo.text() : await lerArquivo(arquivo)
-      setPrevia(await lucroApi.previaDaImportacao({ formato, conteudo, duplicados }))
-    } catch (e) {
-      toast(erroDe(e))
-    } finally {
-      setOcupado(false)
     }
   }
 
@@ -125,7 +106,7 @@ export default function Produtos() {
     try {
       const r = await agir(() => lucroApi.aplicarPrevia(previa.id), undefined)
       if (!r) return
-      if (janela === 'lote') setUltimoLote(r.loteId)
+      setUltimoLote(r.loteId)
       toast(`${r.quantidade} produtos salvos. O histórico foi registrado.`)
       setJanela(null)
       setPrevia(null)
@@ -144,7 +125,7 @@ export default function Produtos() {
         </div>
         <div className="toolbar-actions">
           <Botao variante="secundario" disabled={!selecao.length} onClick={() => etiquetar(selecao)}>Imprimir etiquetas ({selecao.length})</Botao>
-          {escreve ? <Botao variante="secundario" onClick={() => { setPrevia(null); setJanela('importar') }}><Upload size={16} />Importar</Botao> : null}
+          {escreve ? <Botao variante="secundario" onClick={() => navegar('/produtos/importar')}><Upload size={16} />Importar</Botao> : null}
           <Botao variante="fantasma" onClick={() => setJanela('exportar')}><Download size={16} />Exportar</Botao>
           <div className="view-switch">
             <button aria-label="Visualização em tabela" aria-pressed={vista === 'tabela'} className={vista === 'tabela' ? 'active' : ''} onClick={() => setVista('tabela')}><List size={18} /></button>
@@ -155,6 +136,12 @@ export default function Produtos() {
 
       <div className="filter-row">
         <Selecao rotulo="Status" valor={status} aoMudar={setStatus} opcoes={[{ valor: 'ativo', rotulo: 'Ativos' }, { valor: 'arquivado', rotulo: 'Arquivados' }, { valor: 'todos', rotulo: 'Todos' }]} />
+        <Selecao
+          rotulo="Situação do preço"
+          valor={situacao}
+          aoMudar={(v) => { setSituacao(v); setPagina(1) }}
+          opcoes={[{ valor: '' as const, rotulo: 'Todas' }, ...SITUACOES.map((v) => ({ valor: v, rotulo: ROTULO_DA_SITUACAO[v] }))]}
+        />
         <Combo
           rotulo="Categoria"
           valor={categoria}
@@ -165,7 +152,7 @@ export default function Produtos() {
           rotulo="Ordenar"
           valor={ordem}
           aoMudar={setOrdem}
-          opcoes={[{ valor: 'recentes', rotulo: 'Alterados recentemente' }, { valor: 'nome', rotulo: 'Nome: A–Z' }, { valor: 'margem', rotulo: 'Menor margem primeiro' }]}
+          opcoes={[{ valor: 'recentes', rotulo: 'Alterados recentemente' }, { valor: 'nome', rotulo: 'Nome: A–Z' }, { valor: 'margem', rotulo: 'Menor margem primeiro' }, { valor: 'sobra', rotulo: 'Menor sobra por venda primeiro' }]}
         />
         <Combo
           rotulo="Filtros salvos"
@@ -228,10 +215,12 @@ export default function Produtos() {
                   }
                 />
               </label>
-              <span>Produto</span><span>Preço que você cobra</span><span>Sugerido</span><span>Margem estimada</span><span>Ações</span>
+              <span>Produto</span><span>Você cobra</span><span>Sobra por venda</span><span>Margem</span><span>Desconto possível</span><span>Ações</span>
             </div>
             {visiveis.map((p) => {
-              const r = avaliacaoDe(p)
+              const situacaoDele = situacaoDoPreco(p)
+              const c = p.calculo
+              const venda = c?.atual ?? null
               return (
                 <article className={`catalog-row ${destaque === p.id ? 'saved-product' : ''}`} key={p.id}>
                   <label className="product-checkbox">
@@ -250,10 +239,28 @@ export default function Produtos() {
                       {p.sku ? <small>SKU {p.sku}</small> : null}
                     </div>
                   </div>
-                  <div data-label="Praticado">{Number(p.premissas.preco) > 0 ? brl(p.premissas.preco) : 'Não definido'}</div>
-                  <div data-label="Sugerido"><strong>{brl(p.calculo?.sugerido)}</strong></div>
+                  {/*
+                    * O que sobra é o do preço que a pessoa COBRA. O sugerido não é um segundo preço solto ao
+                    * lado: ele vira a dica "mínimo para a meta" só quando ajuda — sem preço ou abaixo da meta.
+                    */}
+                  <div data-label="Você cobra">
+                    {venda ? brl(venda.preco) : <span className="muted">Não definido</span>}
+                    {c && situacaoDele !== 'na_meta' ? <small className="price-hint">mínimo para a meta: {brl(c.minimo)}</small> : null}
+                  </div>
+                  <div data-label="Sobra por venda">
+                    {venda ? <strong className={Number(venda.lucro) < 0 ? 'negative' : 'positive'}>{brl(venda.lucro)}</strong> : <span className="muted">—</span>}
+                  </div>
                   <div data-label="Margem">
-                    <Selo tom={!r ? 'vermelho' : Number(r.margem) < 0 ? 'vermelho' : r.atingeMeta ? 'verde' : 'ambar'}>{r ? pct(r.margem) : 'Revisar'}</Selo>
+                    <Selo tom={TOM_DA_SITUACAO[situacaoDele]}>{venda ? pct(venda.margem) : ROTULO_DA_SITUACAO[situacaoDele]}</Selo>
+                    {venda ? <small className="price-hint">{ROTULO_DA_SITUACAO[situacaoDele]} · meta {pct(p.premissas.meta)}</small> : null}
+                  </div>
+                  <div data-label="Desconto possível">
+                    {!venda ? <span className="muted">—</span>
+                      : c?.descontoMaximo && Number(c.descontoMaximo.valor) > 0 ? (
+                        <><strong>até {brl(c.descontoMaximo.valor)}</strong><small className="price-hint">{pct(c.descontoMaximo.percentual)} · mantendo a meta</small></>
+                      ) : c?.descontoAteEquilibrio && Number(c.descontoAteEquilibrio.valor) > 0 ? (
+                        <><strong className="warning-text">até {brl(c.descontoAteEquilibrio.valor)}</strong><small className="price-hint">só cobre os custos, abaixo da meta</small></>
+                      ) : <span className="negative">Nenhum</span>}
                   </div>
                   <div className="product-actions">
                     <button className="icon-button" onClick={() => etiquetar([p.id])} aria-label={`Imprimir etiqueta de ${p.nome}`} title="Imprimir etiqueta"><Tag size={16} /></button>
@@ -282,13 +289,7 @@ export default function Produtos() {
               )
             })}
           </div>
-          <div className="pagination">
-            <span>{produtos.length} produto(s) · página {atual} de {paginas}</span>
-            <div>
-              <Botao variante="fantasma" disabled={atual <= 1} onClick={() => setPagina(atual - 1)}>Anterior</Botao>
-              <Botao variante="fantasma" disabled={atual >= paginas} onClick={() => setPagina(atual + 1)}>Próxima</Botao>
-            </div>
-          </div>
+          <Paginacao pagina={atual} porPagina={porPagina} total={produtos.length} aoMudarPagina={setPagina} aoMudarPorPagina={setPorPagina} rotulo="produtos" />
         </>
       )}
 
@@ -368,32 +369,15 @@ export default function Produtos() {
       </Janela>
 
       <Janela
-        aberta={janela === 'importar' || janela === 'lote'}
+        aberta={janela === 'lote'}
         aoFechar={() => { setJanela(null); setPrevia(null) }}
-        titulo={janela === 'importar' ? 'Importar seu catálogo' : 'Precificar em lote'}
-        descricao={janela === 'importar' ? 'Até 500 linhas por arquivo. Você verá uma prévia antes de salvar.' : `${selecao.length} produtos selecionados. Revise as diferenças antes de aplicar.`}
+        titulo="Precificar em lote"
+        descricao={`${selecao.length} produtos selecionados. Revise as diferenças antes de aplicar.`}
         larga
       >
         {!previa ? (
           <div className="form-stack">
-            {janela === 'importar' ? (
-              <>
-                <BaixarArquivo className="text-link"  caminho={enderecos.modeloDeImportacao}>Baixar modelo CSV de importação</BaixarArquivo>
-                <div className="upload-zone">
-                  <Upload size={28} />
-                  <label htmlFor="arquivo-de-importacao">Escolha um arquivo CSV ou XLSX (até 1 MB)</label>
-                  <input id="arquivo-de-importacao" type="file" accept=".csv,.xlsx" onChange={(e) => setArquivo(e.target.files?.[0] ?? null)} />
-                </div>
-                <Selecao
-                  rotulo="Produtos duplicados (por SKU ou nome)"
-                  valor={duplicados}
-                  aoMudar={setDuplicados}
-                  opcoes={[{ valor: 'ignorar', rotulo: 'Ignorar os já cadastrados' }, { valor: 'atualizar', rotulo: 'Atualizar os já cadastrados' }]}
-                />
-                <Botao ocupado={ocupado} onClick={() => void lerImportacao()}>Validar e mostrar prévia</Botao>
-              </>
-            ) : (
-              <>
+            <>
                 <Selecao
                   rotulo="O que deseja alterar?"
                   valor={tipoDeRegra}
@@ -430,8 +414,7 @@ export default function Produtos() {
                 )}
                 <Aviso>Ao aplicar, o preço praticado será atualizado para o sugerido. A prévia não altera o catálogo.</Aviso>
                 <Botao ocupado={ocupado} onClick={() => void calcularLote()}>Calcular prévia</Botao>
-              </>
-            )}
+            </>
           </div>
         ) : (
           <>

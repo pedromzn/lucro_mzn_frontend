@@ -19,9 +19,11 @@ import { Cenario } from './Cenario'
 import { EstruturaNaCena, type EventosDaEstrutura } from './Estruturas'
 import { criarMateriais } from './materiais'
 import { Mercadoria, MonteAGuardar } from './Mercadoria'
-import { Pegada, Projetor, Realce, Sinalizadores, Voos, type AlvoDeRotulo, type LevaDeVoos } from './Sinais'
+import { Pegada, Projetor, Realce, Sinalizadores, type AlvoDeRotulo, type LevaDeVoos } from './Sinais'
 import { VISUAL } from './temas'
 import type { Ponto } from './voos'
+import { Rua } from './Rua'
+import { OperacaoAnimada, type EstadoDaOperacao } from './OperacaoAnimada'
 
 export interface PropsDoPalco {
   tema: Tema
@@ -43,6 +45,10 @@ export interface PropsDoPalco {
   voos?: MutableRefObject<LevaDeVoos[]>
   rotulos?: { ouvintes: MutableRefObject<Set<OuvinteDeQuadro>>; alvos: MutableRefObject<AlvoDeRotulo[]>; elementos: MutableRefObject<Map<string, HTMLElement>> }
   reduzirMovimento: boolean
+  animacaoPausada?: boolean
+  reinicioDaAnimacao?: number
+  posicaoDaAssistente?: MutableRefObject<Ponto>
+  aoEstadoDaAnimacao?: (estado: EstadoDaOperacao) => void
   /** a vitrine da escolha de tema: sem clique e sem rótulo */
   soVer?: boolean
   /** o editor: a pegada da estrutura em edição, e a câmera presa durante o arraste */
@@ -56,7 +62,7 @@ function Conteudo(props: PropsDoPalco) {
   useEffect(() => () => mats.descartar(), [mats])
   const v = VISUAL[tema]
   const maior = Math.max(ambiente.largura, ambiente.profundidade)
-  const sombra = maior * 0.72
+  const sombra = (maior + 8) * 0.8
   return (
     <>
       <color attach="background" args={[v.fundo]} />
@@ -77,6 +83,7 @@ function Conteudo(props: PropsDoPalco) {
         shadow-camera-far={maior * 3}
       />
       <CameraDoEstoque largura={ambiente.largura} profundidade={ambiente.profundidade} controle={props.controle} ouvintes={props.rotulos?.ouvintes} reduzirMovimento={props.reduzirMovimento} livre={props.cameraLivre} />
+      <Rua ambiente={ambiente} tema={tema} mats={mats} />
       <Cenario tema={tema} ambiente={ambiente} estruturas={estruturas} mats={mats} />
       {estruturas.map((e) => <EstruturaNaCena key={e.id} e={e} tema={tema} mats={mats} eventos={props.eventos} clicavel={!props.soVer} />)}
       <Mercadoria tema={tema} estruturas={estruturas} posicoes={props.posicoes} cores={props.cores} mats={mats} />
@@ -97,7 +104,8 @@ function Conteudo(props: PropsDoPalco) {
           {props.pegada ? <Pegada retangulo={props.pegada.retangulo} ok={props.pegada.ok} mats={mats} /> : null}
         </>
       )}
-      {props.voos ? <Voos fila={props.voos} cores={props.cores} mats={mats} reduzirMovimento={props.reduzirMovimento} /> : null}
+      {/* a vitrine da escolha de tema não anima nada: sem Assistente, o modelo de 4,7 MB não desce antes da escolha */}
+      {props.soVer ? null : <OperacaoAnimada tema={tema} ambiente={ambiente} estruturas={estruturas} mats={mats} fila={props.voos} reduzirMovimento={props.reduzirMovimento} pausada={props.animacaoPausada} reinicio={props.reinicioDaAnimacao} posicaoDaAssistente={props.posicaoDaAssistente} aoEstado={props.aoEstadoDaAnimacao} />}
       {props.rotulos ? <Projetor {...props.rotulos} /> : null}
     </>
   )

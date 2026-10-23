@@ -13,6 +13,7 @@
  */
 
 import { BaixarArquivo } from '@/components/ArquivosDoEspaco'
+import { Paginacao, usePaginacao } from '@/components/Paginacao'
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Boxes, Box, Download, History, PackagePlus, Plus, Search, ShoppingBag } from 'lucide-react'
 import { D } from '@shared/preco'
@@ -52,9 +53,12 @@ export default function Estoque() {
   const estado = usePainel((s) => s.estado)!
   const [tela, setTela] = useState<TelaDoEstoque | null>(null)
   const [erro, setErro] = useState('')
+  const [atualizacaoDoMapa, setAtualizacaoDoMapa] = useState(0)
   const [busca, setBusca] = useState('')
   const [filtro, setFiltro] = useState<'todos' | 'repor'>('todos')
-  const [pagina, setPagina] = useState(1)
+  /* duas tabelas, duas paginações: o "por página" de cada uma fica lembrado no navegador */
+  const { pagina, setPagina, porPagina, setPorPagina } = usePaginacao('estoque')
+  const historico = usePaginacao('movimentacoes')
   const [ocupado, setOcupado] = useState(false)
   const [com3d] = useState(temWebGL)
   const [secao, setSecaoAgora] = useState<Secao>(() => abaLembrada(com3d))
@@ -70,26 +74,26 @@ export default function Estoque() {
 
   const carregar = useCallback(async () => {
     try {
-      setTela(await lucroApi.estoque({ pagina, busca, filtro }))
+      setTela(await lucroApi.estoque({ pagina, porPagina, busca, filtro, paginaDosMovimentos: historico.pagina, porPaginaDosMovimentos: historico.porPagina }))
       setErro('')
     } catch (e) {
       setErro(erroDe(e))
     }
-  }, [pagina, busca, filtro])
+  }, [pagina, porPagina, busca, filtro, historico.pagina, historico.porPagina])
 
   /* espera a pessoa parar de digitar, e descarta a resposta de uma busca que já ficou para trás */
   useEffect(() => {
     let viva = true
     const relogio = setTimeout(async () => {
       try {
-        const r = await lucroApi.estoque({ pagina, busca, filtro })
+        const r = await lucroApi.estoque({ pagina, porPagina, busca, filtro, paginaDosMovimentos: historico.pagina, porPaginaDosMovimentos: historico.porPagina })
         if (viva) { setTela(r); setErro('') }
       } catch (e) {
         if (viva) setErro(erroDe(e))
       }
     }, 180)
     return () => { viva = false; clearTimeout(relogio) }
-  }, [pagina, busca, filtro])
+  }, [pagina, porPagina, busca, filtro, historico.pagina, historico.porPagina])
 
   const produtos = estado.produtos.filter((p) => p.status === 'ativo')
   const abrir = (p?: Pick<Produto, 'id' | 'premissas' | 'canalId'>, tipo: TipoDeMovimento = 'entrada') => {
@@ -103,7 +107,7 @@ export default function Estoque() {
     setOcupado(true)
     try {
       const r = await agir(() => lucroApi.registrarMovimento(form), form.tipo === 'venda' ? 'Venda registrada e estoque atualizado.' : 'Movimentação registrada no histórico.')
-      if (r) { setForm(null); await carregar() }
+      if (r) { setForm(null); setAtualizacaoDoMapa(v => v + 1); await carregar() }
     } finally {
       setOcupado(false)
     }
@@ -157,7 +161,7 @@ export default function Estoque() {
 
           {secao === 'espaco' ? (
             <Suspense fallback={<div className="skeleton space-loading section-gap" />}>
-              <EspacoDoEstoque aoMudar={() => void carregar()} />
+              <EspacoDoEstoque atualizacao={atualizacaoDoMapa} aoMudar={() => void carregar()} />
             </Suspense>
           ) : secao === 'estoque' ? (
             <>
@@ -211,17 +215,11 @@ export default function Estoque() {
                   Cadastre um produto e depois informe a quantidade que você tem disponível.
                 </Vazio>
               ) : null}
-              <div className="pagination">
-                <span>{tela.total} produto(s) · página {pagina}</span>
-                <div>
-                  <Botao variante="fantasma" disabled={pagina === 1} onClick={() => setPagina((p) => p - 1)}>Anterior</Botao>
-                  <Botao variante="fantasma" disabled={pagina * tela.porPagina >= tela.total} onClick={() => setPagina((p) => p + 1)}>Próxima</Botao>
-                </div>
-              </div>
+              <Paginacao pagina={pagina} porPagina={porPagina} total={tela.total} aoMudarPagina={setPagina} aoMudarPorPagina={setPorPagina} rotulo="produtos" />
             </>
           ) : (
             <section className="panel section-gap">
-              <div className="between"><h2>Últimas movimentações</h2><span className="small muted">Até 60 registros recentes</span></div>
+              <div className="between"><h2>Movimentações</h2><span className="small muted">Da mais recente para a mais antiga</span></div>
               <div className="stock-history">
                 {tela.movimentos.map((m) => {
                   const entra = D(m.quantidade).gte(0)
@@ -271,6 +269,14 @@ export default function Estoque() {
                 })}
               </div>
               {!tela.movimentos.length ? <Vazio titulo="O histórico começa na primeira movimentação.">Entradas, vendas e ajustes ficam registrados aqui.</Vazio> : null}
+              <Paginacao
+                pagina={historico.pagina}
+                porPagina={historico.porPagina}
+                total={tela.totalDeMovimentos ?? tela.movimentos.length}
+                aoMudarPagina={(n) => { historico.setPagina(n); window.scrollTo({ top: 0, behavior: 'instant' }) }}
+                aoMudarPorPagina={historico.setPorPagina}
+                rotulo="movimentações"
+              />
             </section>
           )}
         </>
@@ -326,7 +332,7 @@ export default function Estoque() {
                     () => lucroApi.devolverVenda({ chaveDaOperacao: devolvendo.chaveDaOperacao, movimentoId: devolvendo.id, motivo }),
                     'Devolução registrada e estoque atualizado.',
                   )
-                  if (r) { setDevolvendo(null); await carregar() }
+                  if (r) { setDevolvendo(null); setAtualizacaoDoMapa(v => v + 1); await carregar() }
                 } finally {
                   setOcupado(false)
                 }

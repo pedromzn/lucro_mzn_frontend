@@ -19,7 +19,7 @@
 
 import { z } from 'zod'
 import { D } from './preco.js'
-import { decimalDeEstoque, enderecoDoMovimento, rotuloDaQuantidade } from './estoque.js'
+import { decimalDeEstoque, enderecoDoMovimento } from './estoque.js'
 
 export const TEMAS = ['loja_fofa', 'armazem', 'shopping'] as const
 export type Tema = (typeof TEMAS)[number]
@@ -424,61 +424,3 @@ function plantaDoShopping(n: number): Planta {
 }
 
 const round = (v: number) => Math.round(v * 10) / 10
-
-/* ── as tarefas: o que o estoque está pedindo ───────────────────────────── */
-
-export interface ProdutoParaTarefa {
-  id: string
-  nome: string
-  unidade: string
-  quantidade: string
-  aGuardar: string
-  minimo: string
-  revisao: number
-  arquivado: boolean
-}
-
-export interface Tarefa {
-  tipo: 'guardar' | 'expor' | 'repor'
-  produtoId: string
-  titulo: string
-  detalhe: string
-}
-
-const TETO_DE_TAREFAS = 50
-
-/**
- * A fila do dia, na ordem em que a mercadoria anda: guardar o que chegou, pôr
- * na loja o que só existe no depósito, e comprar o que está no mínimo — o mesmo
- * critério do filtro "Precisa de reposição" da lista (saldo ≤ mínimo). Expor só
- * existe quando a planta tem loja: num armazém não há o que expor.
- */
-export function tarefasDoEstoque(entrada: {
-  produtos: ProdutoParaTarefa[]
-  posicoes: Array<{ estruturaId: string; produtoId: string; quantidade: string }>
-  estruturas: Pick<Estrutura, 'id' | 'zona'>[]
-}): Tarefa[] {
-  const zonaDe = new Map(entrada.estruturas.map((e) => [e.id, e.zona]))
-  const temLoja = entrada.estruturas.some((e) => e.zona === 'loja')
-  const naLoja = new Map<string, ReturnType<typeof D>>()
-  for (const p of entrada.posicoes) {
-    const zona = zonaDe.get(p.estruturaId)
-    if (zona === 'loja' || zona === 'expedicao') naLoja.set(p.produtoId, (naLoja.get(p.produtoId) ?? D(0)).plus(p.quantidade))
-  }
-  const guardar: Tarefa[] = []
-  const expor: Tarefa[] = []
-  const repor: Tarefa[] = []
-  for (const p of entrada.produtos) {
-    if (p.arquivado) continue
-    if (D(p.aGuardar).gt(0)) {
-      guardar.push({ tipo: 'guardar', produtoId: p.id, titulo: `Guardar ${rotuloDaQuantidade(p.aGuardar, p.unidade)} de ${p.nome}`, detalhe: 'Está no chão do recebimento, sem posição.' })
-    }
-    if (temLoja && D(p.quantidade).gt(0) && !(naLoja.get(p.id)?.gt(0))) {
-      expor.push({ tipo: 'expor', produtoId: p.id, titulo: `Levar ${p.nome} para a loja`, detalhe: `Há ${rotuloDaQuantidade(p.quantidade, p.unidade)} no estoque e nada exposto.` })
-    }
-    if (p.revisao > 0 && D(p.quantidade).lte(p.minimo)) {
-      repor.push({ tipo: 'repor', produtoId: p.id, titulo: `Comprar ${p.nome}`, detalhe: `Saldo de ${rotuloDaQuantidade(p.quantidade, p.unidade)}, mínimo de ${rotuloDaQuantidade(p.minimo, p.unidade)}.` })
-    }
-  }
-  return [...guardar, ...expor, ...repor].slice(0, TETO_DE_TAREFAS)
-}

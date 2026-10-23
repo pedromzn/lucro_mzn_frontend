@@ -25,6 +25,26 @@ import { PainelDoResultado, usarCalculo } from '@/precos/Resultado'
 import { EditorDeCobrancas } from '@/precos/EditorDeCobrancas'
 
 const PASSOS = ['Produto', 'Custos', 'Canal', 'Sua meta', 'Revisão']
+
+/**
+ * Os pontos de partida do imposto — PLANO-USABILIDADE-LUCRO.md, "próximas".
+ *
+ * Não presumimos alíquota por venda onde ela não existe: no CPF e no MEI o
+ * imposto não sai de cada venda (no MEI é o DAS fixo do mês, que entra como
+ * despesa mensal), e por isso esses dois já vêm conferidos com 0%. No Simples
+ * o número é a PRIMEIRA faixa do anexo (LC 123/2006, com a LC 155/2016) e
+ * fica por conferir: a alíquota efetiva cresce com o faturamento dos últimos
+ * 12 meses. Lucro Presumido e Real não têm número de partida honesto — só o
+ * contador sabe.
+ */
+const PONTOS_DE_PARTIDA = [
+  { id: 'cpf', rotulo: 'Vendo no CPF', aliquota: '0', conferido: true, explicacao: 'Vendendo como pessoa física, nenhum imposto é descontado de cada venda neste cálculo. Se você recolhe carnê-leão ou outro tributo, informe a alíquota abaixo.' },
+  { id: 'mei', rotulo: 'MEI', aliquota: '0', conferido: true, explicacao: 'No MEI, o imposto é o DAS, um valor fixo por mês — não sai de cada venda. Cadastre o DAS em Custos e canais → Biblioteca de custos, como despesa mensal com rateio, e ele entra no preço de cada produto.' },
+  { id: 'simples-comercio', rotulo: 'Simples · comércio', aliquota: '4', conferido: false, explicacao: '4% é a primeira faixa do Anexo I (comércio), para quem faturou até R$ 180 mil nos últimos 12 meses. Acima disso a alíquota efetiva sobe. Confira com o seu contador e marque abaixo.' },
+  { id: 'simples-industria', rotulo: 'Simples · indústria', aliquota: '4.5', conferido: false, explicacao: '4,5% é a primeira faixa do Anexo II (quem fabrica), para quem faturou até R$ 180 mil nos últimos 12 meses. Acima disso a alíquota efetiva sobe. Confira com o seu contador e marque abaixo.' },
+  { id: 'outro', rotulo: 'Lucro Presumido ou Real', aliquota: null, conferido: false, explicacao: 'Nesses regimes a alíquota depende de vários tributos e da sua operação. Peça ao seu contador a alíquota efetiva sobre a venda e informe abaixo.' },
+] as const
+type PontoDePartida = (typeof PONTOS_DE_PARTIDA)[number]['id']
 const TITULOS = ['O que você vai vender?', 'Quanto custa para você?', 'Onde será a venda?', 'O que você quer que sobre?', 'Tudo pronto para decidir.']
 const SUBTITULOS = [
   'Comece com o essencial. Você pode completar os detalhes depois.',
@@ -65,6 +85,8 @@ function Assistente({ existente, aoRecomecar }: { existente?: Produto; aoRecomec
   const { calculo, erro } = usarCalculo(x)
   const mudar = <K extends keyof Rascunho>(chave: K, valor: Rascunho[K]) => setP((a) => ({ ...a, [chave]: valor }))
   const premissa = <K extends keyof Premissas>(chave: K, valor: Premissas[K]) => setP((a) => ({ ...a, premissas: { ...a.premissas, [chave]: valor } }))
+  /* só a escolha da tela: o produto guarda a alíquota e o "conferi", não o regime */
+  const [regime, setRegime] = useState<PontoDePartida | null>(null)
   const canal = estado.canais.find((c) => c.id === p.canalId)
   const modelos = (tipo: string) => estado.modelosDeCusto.filter((m) => m.tipo === tipo)
   const somenteLeitura = !estado.podeEscrever
@@ -281,15 +303,36 @@ function Assistente({ existente, aoRecomecar }: { existente?: Produto; aoRecomec
                   ))}
                 </div>
               </fieldset>
+              {/*
+                * O imposto saiu de dentro do "detalhes" fechado (PLANO-USABILIDADE-LUCRO.md, "próximas"):
+                * escondido, ninguém conferia, e o catálogo inteiro ficava com a sobra otimista.
+                */}
+              <fieldset className="tax-box">
+                <legend>Imposto sobre a venda</legend>
+                <p className="small muted">Comece pelo seu caso — é um ponto de partida, não a sua alíquota. Quem confirma é você, ou o seu contador.</p>
+                <div className="tax-shortcuts" role="group" aria-label="Ponto de partida do imposto">
+                  {PONTOS_DE_PARTIDA.map((pp) => (
+                    <button
+                      type="button"
+                      key={pp.id}
+                      className={regime === pp.id ? 'active' : ''}
+                      aria-pressed={regime === pp.id}
+                      onClick={() => { setRegime(pp.id); if (pp.aliquota !== null) setP((r) => ({ ...r, premissas: { ...r.premissas, tributo: pp.aliquota, tributoConferido: pp.conferido } })) }}
+                    >
+                      {pp.rotulo}
+                    </button>
+                  ))}
+                </div>
+                {regime ? <Aviso>{PONTOS_DE_PARTIDA.find((pp) => pp.id === regime)!.explicacao}</Aviso> : null}
+                <CampoNumero rotulo="Alíquota sobre cada venda" prefixo="%" valor={x.tributo} aoMudar={(v) => premissa('tributo', v)} />
+                <label className="check">
+                  <input type="checkbox" checked={x.tributoConferido} onChange={(e) => premissa('tributoConferido', e.target.checked)} />
+                  Conferi esta alíquota para a minha operação.
+                </label>
+              </fieldset>
               <details>
-                <summary>Taxa de pagamento, comissão de vendedor e tributos</summary>
+                <summary>Taxa de pagamento e comissão de vendedor</summary>
                 <div className="form-stack section-gap">
-                  <CampoNumero rotulo="Alíquota efetiva estimada de tributos" prefixo="%" valor={x.tributo} aoMudar={(v) => premissa('tributo', v)} />
-                  <label className="check">
-                    <input type="checkbox" checked={x.tributoConferido} onChange={(e) => premissa('tributoConferido', e.target.checked)} />
-                    Conferi esta alíquota para a minha operação.
-                  </label>
-                  <Aviso>MEI: o DAS mensal pode ser cadastrado como despesa mensal com rateio. Não presumimos uma alíquota por venda.</Aviso>
                   <EditorDeCobrancas cobrancas={x.cobrancas} aoMudar={(v) => premissa('cobrancas', v)} />
                 </div>
               </details>

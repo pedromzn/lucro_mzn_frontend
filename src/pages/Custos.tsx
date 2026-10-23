@@ -18,6 +18,7 @@ import { lucroApi, type Canal, type ModeloDeCusto, type TipoDeModelo } from '@/l
 import { agir, usePainel } from '@/lib/painel'
 import { Aviso, Botao, CampoDeTexto, CampoNumero, Janela, Selecao, Selo, Vazio, brl, data, pct, Combo } from '@/components/ui'
 import { EditorDeCobrancas } from '@/precos/EditorDeCobrancas'
+import { LogoDoCanal } from '@/components/LogoDoCanal'
 
 type CanalEmEdicao = Omit<Canal, 'id' | 'revisao' | 'atualizadoEm'> & { id?: string; revisao?: number }
 type ModeloEmEdicao = { id?: string; nome: string; tipo: TipoDeModelo; dados: Record<string, unknown> }
@@ -81,7 +82,7 @@ export default function Custos() {
               {estado.canais.map((c) => (
                 <section className="panel channel-card" key={c.id}>
                   <div className="between">
-                    <div className="channel-logo">{c.nome.slice(0, 2).toUpperCase()}</div>
+                    <LogoDoCanal tipo={c.tipo} />
                     <Selo tom={c.dados.conferido ? 'verde' : 'ambar'}>{c.dados.conferido ? 'Conferido por você' : 'Requer conferência'}</Selo>
                   </div>
                   <h2>{c.nome}</h2>

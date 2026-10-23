@@ -114,15 +114,6 @@
 .space-summary>div{background:#f8f6fb;border-radius:9px;padding:9px 10px}
 .space-summary dt{font-size:11px;color:var(--muted)}
 .space-summary dd{margin:0;font-family:var(--font-title);font-weight:700;font-size:15px}
-.space-tasks{display:flex;flex-direction:column;gap:8px}
-.space-task{display:grid;grid-template-columns:auto 1fr;gap:10px;padding:10px;border-radius:10px;border:1px solid var(--line)}
-.space-task>svg{margin-top:2px;color:var(--iris)}
-.space-task.repor>svg{color:var(--danger)}
-.space-task.expor>svg{color:var(--green)}
-.space-task strong{display:block;font-size:12px}
-.space-task small{color:var(--muted)}
-.space-a11y{font-size:12px}
-.space-a11y ul{margin:8px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
 .space-route{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0}
 .space-route>div{background:#f8f6fb;border-radius:9px;padding:9px 10px}
 .space-route dt{font-size:11px;color:var(--muted)}
@@ -270,10 +261,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--iris);outline:2px sol
 .stock-strip>div{display:flex;align-items:baseline;gap:7px}
 .stock-strip dt{font-size:11.5px;color:var(--muted)}
 .stock-strip dd{margin:0;font-family:var(--font-title);font-weight:600;font-size:14px;color:var(--brand);font-variant-numeric:tabular-nums}
-.space-overview{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px 32px;max-height:none;overflow:visible;margin-bottom:14px}
-.space-overview-col{display:flex;flex-direction:column;gap:12px;min-width:0}
+.space-overview{display:flex;flex-direction:column;gap:14px;max-height:none;overflow:visible;margin-bottom:14px}
 .space-overview .space-summary{grid-template-columns:repeat(4,minmax(0,1fr))}
-@media(max-width:1100px){.space-overview{grid-template-columns:1fr}}
 @media(max-width:640px){.space-overview .space-summary{grid-template-columns:1fr 1fr}}
 .space-float{position:absolute;top:12px;right:12px;bottom:44px;width:min(360px,calc(100% - 24px));z-index:5;display:flex;flex-direction:column;pointer-events:none}
 .space-float>.space-side{pointer-events:auto;max-height:100%;box-shadow:0 18px 48px -16px rgb(23 20 58 / 35%)}
@@ -421,3 +410,213 @@ input:focus,select:focus,textarea:focus{border-color:var(--iris);outline:2px sol
 .company-logo figcaption>span{display:flex;flex-direction:column;gap:2px}
 .company-logo figcaption .btn{min-height:34px;padding:6px 10px;font-size:12px}
 @media(max-width:640px){.company-logos{grid-template-columns:1fr}}
+/* Transporte do Lucro Certo — o papel em preto e branco é a referência; a casca mantém os tokens do painel. */
+.subnav[aria-label="Tipo de etiqueta"] button { display: inline-flex; align-items: center; gap: 7px; }
+.tr-page { display: grid; gap: 20px; margin-top: 18px; }
+.tr-models { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.tr-model { display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--white); cursor: pointer; }
+.tr-model.active { border-color: var(--iris); box-shadow: inset 0 0 0 1px var(--iris); }
+.tr-model strong { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.tr-model small { font-size: 12px; line-height: 1.5; }
+.tr-model-note { margin-top: 14px; }
+.tr-address { min-width: 0; margin: 0; padding: 0; border: 0; }
+.tr-address + .tr-address { margin-top: 25px; padding-top: 20px; border-top: 1px solid var(--line); }
+.tr-address legend { margin-bottom: 14px; font-weight: 700; font-size: 14px; }
+.tr-freight { margin: 18px 0; }
+.tr-aside { display: grid; align-content: start; gap: 16px; min-width: 0; }
+.tr-aside .lbl-step { display: grid; gap: 16px; }
+.tr-label { color: #000; background: #fff; border: 1px solid #bbb; padding: 5%; min-height: 510px; max-width: 380px; width: 100%; margin: auto; font: 12px/1.35 Inter, sans-serif; overflow-wrap: anywhere; }
+.tr-label header { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.tr-label p { margin: 6px 0; font-size: 11px; }
+.tr-label-section { margin-top: 10px; padding-top: 7px; border-top: 1px solid #000; }
+.tr-label-section > b { display: block; font-size: 9px; margin-bottom: 4px; }
+.tr-label-section + .tr-label-section { font-size: 10px; }
+.tr-label .tr-cep { font-size: 16px; font-weight: 700; margin-top: 4px; }
+.tr-reserved { border: 1px solid #000; height: 98px; font-size: 8px; margin-top: 8px; padding: 5px; }
+.tr-receipt div { margin-top: 9px; }
+.tr-label footer { border-top: 1px solid #000; padding-top: 8px; margin-top: 12px; font-size: 9px; }
+.tr-sources { padding: 18px; font-size: 12px; }
+.tr-sources summary { cursor: pointer; font-weight: 600; }
+.tr-sources a { display: block; margin-top: 10px; text-decoration: underline; }
+.tr-errors { margin: 0; padding-left: 16px; }
+.tr-errors li + li { margin-top: 5px; }
+.tr-library { display: grid; gap: 20px; }
+.tr-library-head, .tr-editor-head { flex-wrap: wrap; }
+.tr-library-tools { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.tr-library-tools .field { flex: 1; min-width: 190px; max-width: 360px; }
+.tr-library-table { width: 100%; overflow-x: auto; }
+.tr-library-table table { width: 100%; min-width: 820px; border-collapse: collapse; text-align: left; font-size: 12px; }
+.tr-library-table th { font-weight: 600; color: var(--muted); font-size: 11px; }
+.tr-library-table th, .tr-library-table td { border-bottom: 1px solid var(--line); padding: 12px 10px; vertical-align: middle; }
+.tr-library-table td { max-width: 220px; overflow-wrap: anywhere; }
+.tr-library-table td small { display: block; color: var(--muted); margin-top: 3px; font-size: 11px; }
+.tr-library-table .btn { min-height: 34px; padding: 7px 10px; }
+.tr-save-model { padding-bottom: 18px; border-bottom: 1px solid var(--line); display: grid; gap: 12px; }
+@media (max-width: 1100px) { .tr-models { grid-template-columns: 1fr; } .tr-model { gap: 6px; } }
+@media (max-width: 800px) { .tr-aside { position: static; } .tr-models { grid-template-columns: 1fr; } .tr-label { max-width: 380px; width: 100%; margin: auto; } }
+
+/* Estoque 3D — a tarefa da Assistente acompanha o palco, sem cobrir a rua. */
+.space-operation { position: absolute; top: 14px; left: 14px; max-width: min(540px, calc(100% - 28px)); display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-radius: 12px; background: var(--surface, #fff); border: 1px solid var(--border, #e6e0ef); box-shadow: 0 3px 14px #3424530a; font-size: 12px; color: var(--text, #252239); }
+.space-operation > div:first-child { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.space-operation small { display: block; color: var(--text-muted, #81778f); margin-top: 3px; }
+.space-operation-dot { flex: 0 0 7px; width: 7px; height: 7px; border-radius: 50%; background: #a59bb7; }
+.space-operation-dot.active { background: #8a60cd; box-shadow: 0 0 0 4px #8a60cd15; }
+.space-operation-actions { display: flex; gap: 3px; }
+.space-operation-actions .icon-button { width: 30px; height: 30px; }
+
+/*
+ * Importar produtos (`pages/ImportarProdutos.tsx`, 22/10/2026) — a página do
+ * MKT nas cores daqui. Fica depois do padrão do Marketing Flow e só usa os
+ * tokens do `:root`; as peças comuns (painel, aviso, botão, selo) são do kit.
+ */
+.imp-page{display:flex;flex-direction:column;gap:16px;min-width:0}
+.imp-head{padding-bottom:0}
+.imp-head-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+/* o voltar empurra o modelo para a direita; o `margin-left:auto` do `.imp-link` fica só no "trocar arquivo" */
+.imp-link.imp-back{margin-left:0;margin-right:auto;font-size:13px;font-weight:600;color:var(--ink)}
+.imp-steps{display:flex;gap:4px;list-style:none;margin:16px 0 0;padding:0;overflow-x:auto}
+.imp-steps li{display:flex;align-items:center;gap:8px;padding:10px 12px;margin-bottom:-1px;border-bottom:2px solid transparent;font-size:13px;color:var(--muted);white-space:nowrap}
+.imp-steps li .lbl-step-number{width:22px;height:22px;font-size:11px}
+.imp-steps li.active{border-color:var(--iris);color:var(--ink);font-weight:600}
+.imp-steps li.active .lbl-step-number{background:var(--iris);color:#fff}
+.imp-steps li.done{color:var(--green)}
+.imp-steps li.done .lbl-step-number{background:var(--green-light);color:var(--green)}
+.imp-drop{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;padding:48px 24px;border:2px dashed var(--line);border-radius:14px;cursor:pointer;transition:border-color .16s,background-color .16s}
+.imp-drop:hover,.imp-drop:focus-visible{border-color:var(--iris);background:var(--porcelain);outline:none}
+.imp-drop strong{font-family:var(--font-title);font-size:15px}
+.imp-drop p{max-width:460px}
+.imp-drop-icon{display:grid;place-items:center;width:48px;height:48px;border-radius:14px;background:var(--lavender);color:var(--iris);margin-bottom:6px}
+.imp-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.imp-card{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-top:18px}
+.imp-card strong,.imp-title{display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:6px}
+.imp-file{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;color:var(--iris)}
+.imp-file strong{color:var(--ink)}
+.imp-link{display:inline-flex;align-items:center;gap:5px;margin-left:auto;border:0;background:none;padding:4px;font-size:12px;color:var(--muted)}
+.imp-link:hover{color:var(--iris)}
+.imp-table{overflow-x:auto}
+.imp-table table{width:100%;min-width:620px;border-collapse:collapse;font-size:13px;text-align:left}
+.imp-table th{font-size:11px;font-weight:600;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line)}
+.imp-table td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+.imp-table tr:last-child td{border-bottom:0}
+.imp-table td.muted{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.imp-table select{width:100%;min-width:200px}
+.imp-table select.imp-unset{color:var(--muted)}
+.imp-options{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.imp-options label{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.imp-options label.active{border-color:var(--iris);background:var(--porcelain)}
+.imp-options input{margin-top:4px;accent-color:var(--iris)}
+.imp-options strong{display:block;font-size:13px}
+.imp-options small{display:block;line-height:1.5}
+.imp-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.imp-status{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.imp-status strong{font-family:var(--font-title);font-size:15px}
+.imp-status-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:var(--lavender);color:var(--iris)}
+.imp-status-icon.good{background:var(--green-light);color:var(--green)}
+.imp-status-icon.bad{background:var(--danger-light);color:var(--danger)}
+.imp-bar{height:8px;border-radius:99px;background:var(--lavender);overflow:hidden}
+.imp-bar>div{height:100%;border-radius:99px;background:var(--iris);transition:width .5s ease}
+.imp-bar>div.bad{background:var(--danger)}
+.imp-counts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:18px}
+.imp-counts>div{border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.imp-counts strong{display:block;font-family:var(--font-title);font-size:22px;line-height:1.1;font-variant-numeric:tabular-nums}
+.imp-errors{max-height:260px;overflow-y:auto;margin:8px 0 10px}
+.imp-errors>div{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:12px}
+.imp-errors>div:last-child{border-bottom:0}
+.imp-errors>div>span:first-child{width:86px;flex-shrink:0}
+@media (max-width:760px){.imp-cards,.imp-counts{grid-template-columns:repeat(2,minmax(0,1fr))}.imp-cards{grid-template-columns:1fr}}
+
+/*
+ * O logo do canal (`components/LogoDoCanal.tsx`, 22/10/2026): o ladrilho do
+ * MKT com a marca na cor dela, no lugar das iniciais. Vence o `.channel-logo`
+ * do mock pela ordem; o tamanho e o fundo vêm do componente.
+ */
+.channel-logo{flex-shrink:0;border-radius:28%;color:#fff;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.channel-logo img{display:block}
+.channel-logo[aria-label="Mercado Livre"]{box-shadow:inset 0 0 0 1px var(--line)}
+.channel-logo-pair{display:inline-flex;gap:6px;flex-shrink:0}
+
+/* Simulações abre pela lista (`pages/Simular.tsx`, 22/10/2026): o caminho de volta acima do simulador */
+.scenario-back{margin-bottom:18px}
+.simulation-kind{margin-top:18px}
+
+/*
+ * A paginação (`components/Paginacao.tsx`, 22/10/2026) — a do MKT: intervalo,
+ * "por página" e os botões redondos, nos tokens daqui. A borda de cima separa
+ * da última linha da tabela.
+ */
+.pager{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;border-top:1px solid var(--line);padding:10px 4px 0;margin-top:12px}
+.pager-info{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;font-size:12px;color:var(--muted)}
+.pager-info p{font-variant-numeric:tabular-nums}
+.pager-info label{display:flex;align-items:center;gap:6px}
+.pager select{width:auto;min-height:0;padding:4px 24px 4px 8px;font-size:12px;font-weight:500;border-radius:8px}
+.pager-nav{display:flex;align-items:center;gap:4px}
+.pager-nav>button{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--ink)}
+.pager-nav>button:hover:not(:disabled){border-color:var(--iris);color:var(--iris)}
+.pager-nav>button:disabled{opacity:.3}
+.pager-nav form{display:flex;align-items:center;gap:6px;padding:0 6px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.pager-nav input{min-height:0!important;padding:4px 6px!important;text-align:center;font-size:12px!important;font-weight:500;border-radius:8px!important}
+
+/*
+ * "Onde está cada item" (`estoque3d/PainelDoEspaco.tsx`, 22/10/2026): a linha
+ * inteira abaixo dos números do espaço, com a busca à direita do título.
+ */
+.space-where{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:14px}
+.space-where h3{margin-bottom:2px}
+.space-where-search{flex:0 1 340px}
+.space-where-table{overflow-x:auto}
+.space-where-table table{width:100%;min-width:640px;border-collapse:collapse;font-size:13px;text-align:left}
+.space-where-table th{font-size:11px;font-weight:600;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line)}
+.space-where-table td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+.space-where-table tr:last-child td{border-bottom:0}
+.space-where-produto{display:inline-flex;align-items:center;gap:8px}
+.space-where-produto small{font-size:11px}
+.space-where-table .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.space-where-table .acao{text-align:right;width:1%;white-space:nowrap}
+.space-where-table .acao .btn{min-height:32px;padding:6px 10px;font-size:12px;white-space:nowrap}
+@media(max-width:640px){.space-where>.between{flex-direction:column;align-items:stretch}.space-where-search{flex:auto}}
+
+/*
+ * A tabela de Produtos responde "quanto sobra" e "quanto posso descontar"
+ * (PLANO-USABILIDADE-LUCRO.md, U2): sete colunas no lugar de seis. A dica
+ * embaixo do valor ("mínimo para a meta", "mantendo a meta") é menor e
+ * apagada, para o número continuar sendo o que se lê primeiro.
+ */
+/* o mesmo seletor da regra do mock (`.catalog:not(.card-view)`, acima de 1024 px): com um mais fraco, a 7ª coluna caía para outra linha */
+@media(min-width:1024px){.catalog:not(.card-view) .catalog-head,.catalog:not(.card-view) .catalog-row{grid-template-columns:20px minmax(150px,1fr) 112px 104px 126px 142px 138px;gap:10px}}
+.catalog-row [data-label]{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0}
+.price-hint{display:block;font-size:10px;line-height:1.35;color:var(--muted)}
+.warning-text{color:var(--amber)}
+@media(max-width:1024px){
+  .catalog-head,.catalog-row{grid-template-columns:20px minmax(0,1fr) minmax(0,1fr)}
+  .catalog-row>[data-label]:nth-child(5){grid-column:3;padding-left:0}
+  .catalog-row>[data-label]:nth-child(6){grid-column:1/3}
+}
+
+/*
+ * Visão geral (PLANO-USABILIDADE-LUCRO.md, U3): cada cartão abre Produtos já
+ * filtrado; o de prejuízo fica vermelho e o de abaixo da meta, âmbar, só
+ * quando há o que olhar.
+ */
+.metric-link{text-align:left;font:inherit;color:inherit;cursor:pointer;transition:border-color .16s,box-shadow .16s}
+.metric-link:hover{border-color:var(--iris);box-shadow:0 4px 14px #6d28d914}
+.metric-link.bad{border-color:#f1cfd6;background:var(--danger-light)}
+.metric-link.bad strong{color:var(--danger)}
+.metric-link.warn{border-color:#f0dcbc;background:var(--amber-light)}
+.metric-link.warn strong{color:var(--amber)}
+.attention-list .badge{margin-left:6px;vertical-align:1px}
+.attention-prejuizo,.attention-revisar{color:var(--danger)}
+.attention-more{margin-top:6px;align-self:flex-start;font-size:12px}
+
+/* Comparar canais (PLANO-USABILIDADE-LUCRO.md, U5): o melhor canal com borda verde, o de prejuízo com borda vermelha */
+.channel-compare-card.best{border-color:#bfe0d2;box-shadow:0 0 0 1px #bfe0d2}
+.channel-compare-card.loss{border-color:#f1cfd6}
+.channel-price.negative{color:var(--danger)}
+
+/* O imposto sobre a venda, visível no passo Canal do Precificar, com os pontos de partida (PLANO-USABILIDADE-LUCRO.md) */
+.tax-box{display:flex;flex-direction:column;gap:12px;border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.tax-box legend{padding:0 6px;margin-bottom:0;font-weight:600}
+.tax-shortcuts{display:flex;flex-wrap:wrap;gap:8px}
+.tax-shortcuts button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:7px 12px;font-size:12px;color:var(--ink)}
+.tax-shortcuts button:hover{border-color:var(--iris);color:var(--iris)}
+.tax-shortcuts button.active{background:var(--lavender);border-color:var(--iris);color:var(--iris);font-weight:600}
+.tax-box .notice{margin:0}

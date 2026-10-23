@@ -19,7 +19,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowUpRight, Boxes, Building2, Calculator, ChartNoAxesCombined, ChevronRight, ChevronUp, GitCompareArrows, LayoutDashboard,
-  LifeBuoy, LogOut, Menu, Package, Percent, Plus, Settings, Settings2, SlidersHorizontal, Tags, User, X,
+  LifeBuoy, LogOut, Menu, Package, Settings, Settings2, SlidersHorizontal, Tags, User, X,
 } from 'lucide-react'
 import { useSessao } from '@/lib/sessao'
 import { usePainel } from '@/lib/painel'
@@ -38,8 +38,7 @@ const MENU = [
   { para: '/', rotulo: 'Visão geral', Icone: LayoutDashboard },
   { para: '/produtos', rotulo: 'Produtos', Icone: Package },
   { para: '/precificar', rotulo: 'Precificar', Icone: Calculator },
-  { para: '/cenarios', rotulo: 'Cenários', Icone: SlidersHorizontal },
-  { para: '/descontos', rotulo: 'Descontos', Icone: Percent },
+  { para: '/simulacoes', rotulo: 'Simulações', Icone: SlidersHorizontal },
   { para: '/canais', rotulo: 'Comparar canais', Icone: GitCompareArrows },
   { para: '/custos', rotulo: 'Custos e canais', Icone: Settings2 },
   { para: '/estoque', rotulo: 'Estoque e vendas', Icone: Boxes },
@@ -51,13 +50,13 @@ const MENU = [
 const TITULOS: Record<string, [string, string, string]> = {
   '/': ['Visão geral', 'Seu negócio, mais claro.', 'Cada preço tem uma história. Entenda a sua.'],
   '/produtos': ['Produtos', 'Seu catálogo, organizado.', 'Encontre, revise e compare os seus produtos.'],
+  '/produtos/importar': ['Importar produtos', 'Seu catálogo, de uma vez.', 'Traga uma planilha e confira cada coluna antes de deixar entrar.'],
   '/precificar': ['Precificar', 'Preço com propósito.', 'Custos na mesa. Margem à vista.'],
-  '/cenarios': ['Cenários', 'Experimente antes de decidir.', 'Compare o cenário atual com uma nova possibilidade.'],
-  '/descontos': ['Descontos', 'Desconto com limite.', 'Saiba quanto pode oferecer sem abrir mão da sua meta.'],
+  '/simulacoes': ['Simulações', 'Experimente antes de decidir.', 'Mude preço e custos ou simule uma promoção, sem mexer no catálogo.'],
   '/canais': ['Comparar canais', 'Mesmo produto. Outros caminhos.', 'Veja quanto sobra em cada canal de venda.'],
   '/custos': ['Custos e canais', 'Cada custo no seu lugar.', 'Organize as premissas que dão confiança ao seu preço.'],
   '/estoque': ['Estoque e vendas', 'Seu estoque, acompanhado.', 'Entradas, vendas e reposição com um histórico claro.'],
-  '/etiquetas': ['Etiquetas', 'Do catálogo para a etiqueta.', 'Escolha os produtos, personalize e gere seu PDF.'],
+  '/etiquetas': ['Etiquetas', 'Loja e transporte.', 'Escolha o modelo, confira os dados e gere seu PDF.'],
   '/relatorios': ['Relatórios', 'Os números que orientam.', 'Enxergue a rentabilidade estimada do seu catálogo.'],
   '/conta': ['Minha conta', 'Sua conta. Seu controle.', 'Perfil, assinatura, segurança e privacidade.'],
   '/empresa': ['Sua empresa', 'Sua equipe, organizada.', 'Dados da empresa, pessoas com acesso, espaços de trabalho e logos.'],
@@ -77,7 +76,6 @@ const CONFIGURACOES = [
   { para: '/conta', rotulo: 'Minha conta', descricao: 'Perfil, assinatura, segurança e privacidade.', Icone: User, soGestor: false },
   { para: '/empresa', rotulo: 'Sua empresa', descricao: 'Dados, pessoas com acesso, espaços de trabalho e logos.', Icone: Building2, soGestor: true },
 ]
-const SEM_BOTAO_DE_PRECIFICAR = ['/precificar', '/conta', '/empresa', '/ajuda']
 
 /** `/precificar/prd_x` é Precificar; `/empresa/usuarios` é Sua empresa */
 const raizDa = (caminho: string) => (caminho === '/' ? '/' : `/${caminho.split('/')[1]}`)
@@ -92,7 +90,8 @@ export function Casca({ children }: { children: ReactNode }) {
   const [trocandoEspaco, setTrocandoEspaco] = useState(false)
 
   const raiz = raizDa(pathname)
-  const titulo = TITULOS[raiz] ?? TITULOS['/']
+  /* a sub-rota com título próprio (a importação) ganha da raiz */
+  const titulo = TITULOS[pathname] ?? TITULOS[raiz] ?? TITULOS['/']
   const precisaDoCatalogo = !SEM_CATALOGO.includes(raiz)
 
   useEffect(() => { void carregarAssinatura() }, [carregarAssinatura])
@@ -199,9 +198,7 @@ export function Casca({ children }: { children: ReactNode }) {
               <h1>{titulo[0]}</h1>
               <p>{titulo[1]} {titulo[2]}</p>
             </div>
-            {!SEM_BOTAO_DE_PRECIFICAR.includes(raiz) && estado?.podeEscrever ? (
-              <Botao onClick={() => navegar('/precificar')}><Plus size={17} />Precificar produto</Botao>
-            ) : null}
+            {/* sem o "Precificar produto" do mock em toda tela (22/10/2026, pedido do Pedro): ele fica na Visão geral, no Produtos vazio e no menu */}
           </div>
           {situacao ? <AvisoDeAssinatura situacao={situacao} /> : null}
           <ConviteDeMfa />

@@ -1,8 +1,7 @@
 /** A mercadoria andando na cena — PLANO-ESTOQUE-3D.md, fatia 4. */
 
 import { describe, expect, it } from 'vitest'
-import { voosDaDiferenca, voosDoMovimento, type Lugares } from '@/estoque3d/voos'
-import type { MovimentoNoMapa } from '@/lib/api'
+import { voosDaDiferenca, type Lugares } from '@/estoque3d/voos'
 
 const lugares: Lugares = {
   posicao: (e) => ({ x: e.estruturaId === 'loja' ? 5 : -5, y: e.nivel, z: e.vao }),
@@ -35,24 +34,5 @@ describe('a diferença entre dois mapas', () => {
   it('nada mudou, nada voa', () => {
     const r = { posicoes: [pos('dep', '5')], produtos: [{ id: 'p', aGuardar: '1' }] }
     expect(voosDaDiferenca(r, r, lugares)).toEqual([])
-  })
-})
-
-describe('o replay de um movimento', () => {
-  const mov = (tipo: string, quantidade: string, linhas: MovimentoNoMapa['linhas']): MovimentoNoMapa => ({ id: 'm', tipo, produtoId: 'p', quantidade, criadoEm: '', linhas })
-  const linha = (estruturaId: string, quantidade: string) => ({ estruturaId, nivel: 0, vao: 0, quantidade, rotulo: estruturaId })
-
-  it('guardar: do chão para a prateleira', () => {
-    const v = voosDoMovimento(mov('transferencia', '0', [linha('dep', '4')]), lugares)
-    expect(v.map((x) => [x.de, x.para])).toEqual([[lugares.chao, { x: -5, y: 0, z: 0 }]])
-  })
-  it('venda de 3 com 2 na loja: 2 saem da loja e 1 do chão, os dois para a expedição', () => {
-    const v = voosDoMovimento(mov('venda', '-3', [linha('loja', '-2')]), lugares)
-    expect(v.map((x) => x.de.x).sort()).toEqual([0, 5])
-    expect(v.every((x) => x.para === lugares.saida)).toBe(true)
-  })
-  it('devolução volta pelo caixa e fica a guardar', () => {
-    const v = voosDoMovimento(mov('devolucao', '2', []), lugares, 500)
-    expect(v).toEqual([{ produtoId: 'p', de: lugares.saida, para: lugares.chao, unidades: 2, atraso: 500 }])
   })
 })

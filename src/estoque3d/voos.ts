@@ -1,9 +1,9 @@
 /**
  * A mercadoria andando — PLANO-ESTOQUE-3D.md, fatia 4.
  *
- * Uma conta só para três coisas: a ação de quem está na tela, a de outra
- * pessoa (que chega quando o mapa é relido) e o replay das últimas
- * movimentações. Em todas, cada produto tem FONTES (onde diminuiu) e DESTINOS
+ * Uma conta só para duas coisas: a ação de quem está na tela e a de outra
+ * pessoa (que chega quando o mapa é relido). O replay das últimas
+ * movimentações saiu em 22/10/2026 (pedido do Pedro). Nas duas, cada produto tem FONTES (onde diminuiu) e DESTINOS
  * (onde aumentou); o par vira um voo. O que sobra sem par saiu pela expedição
  * (o estoque diminuiu) ou chegou pela doca (aumentou) — e a devolução, que
  * volta pelo caixa, chega pela expedição.
@@ -17,6 +17,8 @@ import type { MovimentoNoMapa, PosicaoNoMapa } from '@/lib/api'
 export interface Ponto { x: number; y: number; z: number }
 
 export interface Voo {
+  operacao?: 'receber' | 'mover' | 'entregar' | 'retirar'
+  legenda?: string
   produtoId: string
   de: Ponto
   para: Ponto
@@ -56,14 +58,14 @@ function parear(produtoId: string, fontes: Pontas, destinos: Pontas, lugares: Lu
   while (f.length && d.length) {
     const q = Math.min(f[0]![1], d[0]![1])
     const de = ponto(f[0]![0]), para = ponto(d[0]![0])
-    if (de && para) voos.push({ produtoId, de, para, unidades: unidades(q) })
+    if (de && para) voos.push({ produtoId, de, para, operacao: 'mover', unidades: unidades(q) })
     f[0]![1] -= q
     d[0]![1] -= q
     if (f[0]![1] <= 1e-9) f.shift()
     if (d[0]![1] <= 1e-9) d.shift()
   }
-  for (const [chave, q] of f) { const de = ponto(chave); if (de) voos.push({ produtoId, de, para: lugares.saida, unidades: unidades(q) }) }
-  for (const [chave, q] of d) { const para = ponto(chave); if (para) voos.push({ produtoId, de: chegaPor, para, unidades: unidades(q) }) }
+  for (const [chave, q] of f) { const de = ponto(chave); if (de) voos.push({ produtoId, de, para: lugares.saida, operacao: 'entregar', unidades: unidades(q) }) }
+  for (const [chave, q] of d) { const para = ponto(chave); if (para) voos.push({ produtoId, de: chegaPor, para, operacao: 'receber', unidades: unidades(q) }) }
   return voos
 }
 
@@ -98,22 +100,4 @@ export function voosDaDiferenca(antes: RetratoDoEstoque, depois: RetratoDoEstoqu
     voos.push(...parear(produtoId, fontes, destinos, lugares, lugares.entrada))
   }
   return comAtraso(voos)
-}
-
-/** Um movimento do histórico, em voos — o replay. */
-export function voosDoMovimento(m: MovimentoNoMapa, lugares: Lugares, inicio = 0): Voo[] {
-  const fontes: Pontas = new Map(), destinos: Pontas = new Map()
-  let nasPosicoes = 0
-  for (const l of m.linhas) {
-    const q = Number(l.quantidade)
-    nasPosicoes += q
-    const chave = chaveDoEndereco(l)
-    if (q < 0) fontes.set(chave, (fontes.get(chave) ?? 0) - q)
-    else destinos.set(chave, (destinos.get(chave) ?? 0) + q)
-  }
-  /* o que o total mudou e as posições não explicam passou pelo "a guardar" */
-  const noChao = Number(m.quantidade) - nasPosicoes
-  if (noChao < -1e-9) fontes.set(CHAO, -noChao)
-  else if (noChao > 1e-9) destinos.set(CHAO, noChao)
-  return comAtraso(parear(m.produtoId, fontes, destinos, lugares, m.tipo === 'devolucao' ? lugares.saida : lugares.entrada), inicio)
 }

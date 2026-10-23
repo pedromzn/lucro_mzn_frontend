@@ -127,7 +127,7 @@ export function Cenario({ tema, ambiente, estruturas, mats }: { tema: Tema; ambi
     /* a parede do depósito, com a passagem, separando a loja dos fundos */
     const deposito = areasDasZonas(estruturas, ambiente).find((z) => z.zona === 'deposito')
     if (deposito) {
-      const zParede = deposito.z1 + 0.15
+      const zParede = Math.max(deposito.z1 + 0.15, -P / 2 + 3.1)
       const passagem = 1.2
       const xPassagem = L / 2 - 1.6
       const esquerda = xPassagem - passagem / 2 + L / 2

@@ -13,7 +13,9 @@
 import type { Calculo, Premissas } from '@shared/preco'
 import type { DadosDoCanal, Preferencias } from '@shared/contratos'
 import type { LayoutDeEtiqueta, EstiloDeEtiqueta } from '@shared/etiquetas'
-import type { Ambiente, DadosDaEstrutura, Endereco, Estrutura, PedidoDeTransferencia, Sugestao, Tarefa, Tema } from '@shared/enderecos'
+import type { ModeloDeTransporteSalvo, PedidoDeTransporte, SalvarModeloDeTransporte } from '@shared/transporte'
+import type { Analise, Conflito, ResumoDaImportacao, Vinculo } from '@shared/importacao'
+import type { Ambiente, DadosDaEstrutura, Endereco, Estrutura, PedidoDeTransferencia, Sugestao, Tema } from '@shared/enderecos'
 import { cabecalhosDeSessao, encerrarSessaoPorToken } from './sessao'
 import type { RetratoDaSessao } from './sessao'
 
@@ -387,9 +389,13 @@ export interface Estado {
   canais: Canal[]
   modelosDeCusto: ModeloDeCusto[]
   cenarios: Cenario[]
-  historico: Array<{ id: string; produtoId: string; revisao: number; loteId: string | null; criadoEm: string }>
+  /** as últimas revisões, com o preço de cada uma e o da anterior (`antes` é `null` na primeira) */
+  historico: Array<{ id: string; produtoId: string; revisao: number; loteId: string | null; criadoEm: string; depois: ResumoDaRevisao; antes: ResumoDaRevisao | null }>
   preferencias: Preferencias
 }
+
+/** O que uma revisão diz de preço — o histórico dos Relatórios (`modules/estado/routes.ts`). */
+export interface ResumoDaRevisao { preco: string; custo: string; sugerido: string; margem: string | null }
 
 export interface Revisao {
   id: string
@@ -456,6 +462,9 @@ export interface TelaDoEstoque {
   pagina: number
   porPagina: number
   movimentos: Movimento[]
+  totalDeMovimentos: number
+  paginaDosMovimentos: number
+  porPaginaDosMovimentos: number
   totais: { controlados: number; repor: number; valorEmEstoque: string; vendas: number; totalVendido: string; resultadoEstimado: string }
 }
 
@@ -518,7 +527,6 @@ export interface MapaDoEstoque {
   produtos: ProdutoNoMapa[]
   produtosTruncados: boolean
   movimentos: MovimentoNoMapa[]
-  tarefas: Tarefa[]
 }
 
 export interface DetalheDaVenda {
@@ -586,16 +594,24 @@ export const lucroApi = {
   apagarModelo: (id: string) => request<void>(`/modelos-de-custo/${id}`, { method: 'DELETE' }),
 
   salvarCenario: (c: { nome: string; produtoId: string | null; premissas: Premissas }) => request<Cenario>('/cenarios', json(c)),
+  editarCenario: (id: string, c: { nome: string; produtoId: string | null; premissas: Premissas }) => request<Cenario>(`/cenarios/${encodeURIComponent(id)}`, json(c, 'PUT')),
   aplicarCenario: (id: string) => request<Produto>(`/cenarios/${id}/aplicar`, { method: 'POST' }),
 
   previaDoLote: (regra: RegraDoLote) => request<Previa>('/lote/previa', json(regra)),
   aplicarPrevia: (id: string) => request<{ quantidade: number; tipo: string; loteId: string }>(`/lote/${id}/aplicar`, { method: 'POST' }),
   reverterLote: (id: string) => request<{ quantidade: number }>(`/lote/${id}/reverter`, { method: 'POST' }),
-  previaDaImportacao: (entrada: { formato: 'csv' | 'xlsx'; conteudo: string; duplicados: 'ignorar' | 'atualizar' }) =>
-    request<Previa>('/importacao/previa', json(entrada)),
 
-  estoque: (consulta: { pagina: number; busca: string; filtro: 'todos' | 'repor' }) =>
-    request<TelaDoEstoque>(`/estoque?pagina=${consulta.pagina}&busca=${encodeURIComponent(consulta.busca)}&filtro=${consulta.filtro}`),
+  /* a importação do MKT: analisar não grava; importar devolve o registro e o laço segue no servidor */
+  analisarImportacao: (arquivo: string, conteudo: string) => request<Analise>('/importacao/analisar', json({ arquivo, conteudo })),
+  importar: (pedido: { arquivo: string; conteudo: string; vinculos: Vinculo[]; conflito: Conflito }) =>
+    request<ResumoDaImportacao>('/importacao', json(pedido)),
+  acompanharImportacao: (id: string) => request<ResumoDaImportacao>(`/importacao/${encodeURIComponent(id)}`),
+
+  estoque: (consulta: { pagina: number; porPagina: number; busca: string; filtro: 'todos' | 'repor'; paginaDosMovimentos: number; porPaginaDosMovimentos: number }) =>
+    request<TelaDoEstoque>(
+      `/estoque?pagina=${consulta.pagina}&porPagina=${consulta.porPagina}&busca=${encodeURIComponent(consulta.busca)}&filtro=${consulta.filtro}` +
+        `&paginaDosMovimentos=${consulta.paginaDosMovimentos}&porPaginaDosMovimentos=${consulta.porPaginaDosMovimentos}`,
+    ),
   registrarMovimento: (m: PedidoDeMovimento) =>
     request<{ id: string; vendaId: string | null; repetida: boolean; quantidade?: string }>('/estoque/movimentos', json(m)),
   devolverVenda: (d: { chaveDaOperacao: string; movimentoId: string; motivo: string }) => request<{ id: string }>('/estoque/devolucoes', json(d)),
@@ -615,6 +631,10 @@ export const lucroApi = {
   salvarModeloDeEtiqueta: (m: { nome: string; layout: LayoutDeEtiqueta; anteriorId?: string }) =>
     request<{ id: string; versao: number }>('/etiquetas/modelos', json(m)),
   gerarEtiquetas: (p: PedidoDeEtiquetas) => arquivo('/etiquetas/pdf', json(p)),
+  gerarEtiquetasDeTransporte: (p: PedidoDeTransporte) => arquivo('/etiquetas/transporte/pdf', json(p)),
+  modelosDeTransporte: () => request<{ modelos: ModeloDeTransporteSalvo[] }>('/etiquetas/transporte/modelos'),
+  salvarModeloDeTransporte: (p: SalvarModeloDeTransporte) => request<ModeloDeTransporteSalvo>('/etiquetas/transporte/modelos', json(p)),
+  excluirModeloDeTransporte: (id: string, revisao: number) => request<void>(`/etiquetas/transporte/modelos/${encodeURIComponent(id)}`, json({ revisao }, 'DELETE')),
 
   /** os logos da EMPRESA (até dois), cadastrados em Sua empresa e escolhidos nas etiquetas */
   logos: () => request<{ logos: LogoDaEmpresa[]; maximo: number }>('/logos'),
@@ -636,6 +656,7 @@ export const lucroApi = {
 export const enderecos = {
   imagem: (id: string) => `/arquivos/${encodeURIComponent(id)}`,
   exportar: (formato: 'csv' | 'xlsx' | 'pdf' | 'json') => `/exportar?formato=${formato}`,
-  modeloDeImportacao: '/importacao/modelo',
+  modeloDeImportacao: (formato: 'csv' | 'xlsx') => `/importacao/modelo?formato=${formato}`,
+  errosDaImportacao: (id: string) => `/importacao/${encodeURIComponent(id)}/erros`,
   estoqueEmCsv: '/estoque/exportar',
 }

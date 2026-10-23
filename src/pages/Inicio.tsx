@@ -14,11 +14,11 @@ import {
   Store, Target, TriangleAlert,
 } from 'lucide-react'
 import type { Avaliacao } from '@shared/preco'
-import { enderecos, type Produto } from '@/lib/api'
+import { enderecos, type Estado, type Produto, type ResumoDaRevisao } from '@/lib/api'
 import { usePainel } from '@/lib/painel'
 import { Aviso, Botao, Selo, Vazio, brl, data, pct } from '@/components/ui'
+import { ROTULO_DA_SITUACAO, SITUACOES, contarSituacoes, situacaoDoPreco, type SituacaoDoPreco } from '@/precos/situacao'
 
-const NOVENTA_DIAS = 90 * 86_400_000
 
 /** A avaliação que conta: a do preço que a pessoa cobra, e a sugerida enquanto não houver. */
 export const avaliacaoDe = (p: Produto): Avaliacao | null => p.calculo?.atual ?? p.calculo?.resultado ?? null
@@ -38,8 +38,26 @@ export default function Inicio() {
   const produtos = estado.produtos.filter((p) => p.status === 'ativo')
   const validos = produtos.filter((p) => p.calculo)
   const media = validos.length ? validos.reduce((a, p) => a + Number(avaliacaoDe(p)!.margem), 0) / validos.length : null
-  const abaixo = validos.filter((p) => !avaliacaoDe(p)!.atingeMeta)
-  const revisar = produtos.filter((p) => !p.calculo || p.calculo.avisos.length > 0 || estado.agora - Date.parse(p.atualizadoEm) > NOVENTA_DIAS)
+  /*
+   * O que pede decisão, do mais grave para o menos (PLANO-USABILIDADE-LUCRO.md, U3).
+   * O tributo não conferido NÃO entra aqui: ele vale para o catálogo quase
+   * inteiro e afogava o resto ("11 precisam de revisão", a mesma frase três
+   * vezes). Vira um aviso só, logo abaixo dos cartões.
+   */
+  const contagem = contarSituacoes(produtos)
+  const gravidade = (p: Produto) => SITUACOES.indexOf(situacaoDoPreco(p))
+  const atencao = produtos.filter((p) => situacaoDoPreco(p) !== 'na_meta').sort((a, b) => gravidade(a) - gravidade(b))
+  const semTributo = produtos.filter((p) => p.calculo && !p.premissas.tributoConferido).length
+  const verProdutos = (situacao?: SituacaoDoPreco) => navegar('/produtos', { state: { situacao } })
+  const motivo = (p: Produto): string => {
+    const c = p.calculo
+    switch (situacaoDoPreco(p)) {
+      case 'prejuizo': return `Perde ${brl(Math.abs(Number(c!.atual!.lucro)))} a cada venda · mínimo para a meta ${brl(c!.minimo)}`
+      case 'abaixo': return `${pct(c!.atual!.margem)} de margem · meta ${pct(p.premissas.meta)} · mínimo ${brl(c!.minimo)}`
+      case 'sem_preco': return `Ainda sem preço de venda · mínimo para a meta ${brl(c!.minimo)}`
+      default: return p.erro ?? 'Confira os custos e as taxas deste produto.'
+    }
+  }
   const margemDe = (p: Produto) => Number(avaliacaoDe(p)!.margem)
   const faixas = [
     { rotulo: 'Negativa', cor: '#bb4356', itens: validos.filter((p) => margemDe(p) < 0) },
@@ -70,18 +88,25 @@ export default function Inicio() {
 
       <div className="metric-grid">
         {[
-          { rotulo: 'Produtos ativos', valor: produtos.length, sub: 'Seu catálogo organizado', Icone: Package },
-          { rotulo: 'Abaixo da meta', valor: abaixo.length, sub: abaixo.length ? 'Vale revisar os preços' : 'Nenhum abaixo da meta', Icone: Target },
-          { rotulo: 'Precisam de revisão', valor: revisar.length, sub: 'Custos, tributos ou dados incompletos', Icone: TriangleAlert },
-          { rotulo: 'Canais cadastrados', valor: estado.canais.length, sub: 'Perfis de venda configuráveis', Icone: Store },
+          { rotulo: 'Produtos ativos', valor: produtos.length, sub: `${contagem.na_meta} na meta`, Icone: Package, filtro: undefined, tom: '' },
+          { rotulo: 'Em prejuízo', valor: contagem.prejuizo, sub: contagem.prejuizo ? 'Vendendo, você perde dinheiro' : 'Nenhum vendendo no prejuízo', Icone: TriangleAlert, filtro: 'prejuizo' as const, tom: contagem.prejuizo ? 'bad' : '' },
+          { rotulo: 'Abaixo da meta', valor: contagem.abaixo, sub: contagem.abaixo ? 'Sobra menos do que você quer' : 'Nenhum abaixo da meta', Icone: Target, filtro: 'abaixo' as const, tom: contagem.abaixo ? 'warn' : '' },
+          { rotulo: 'Sem preço definido', valor: contagem.sem_preco + contagem.revisar, sub: contagem.sem_preco + contagem.revisar ? 'Defina quanto você cobra' : 'Todos com preço', Icone: Store, filtro: 'sem_preco' as const, tom: '' },
         ].map((m) => (
-          <div className="metric" key={m.rotulo}>
+          <button type="button" className={`metric metric-link ${m.tom}`} key={m.rotulo} onClick={() => verProdutos(m.filtro)} aria-label={`${m.rotulo}: ${m.valor}. Ver na lista de produtos`}>
             <div className="between"><span>{m.rotulo}</span><m.Icone size={18} /></div>
             <strong>{m.valor}</strong>
             <small>{m.sub}</small>
-          </div>
+          </button>
         ))}
       </div>
+
+      {semTributo ? (
+        <Aviso tipo="atencao">
+          {semTributo === produtos.length ? 'Nenhum produto' : `${semTributo} produto(s)`} {semTributo === produtos.length ? 'tem' : 'estão sem'} o tributo conferido: se você recolhe imposto sobre a venda, a sobra real é menor do que a mostrada.{' '}
+          Confira o tributo no Precificar, passo “Canal”.
+        </Aviso>
+      ) : null}
 
       <div className="dashboard-grid">
         <section className="panel">
@@ -108,25 +133,19 @@ export default function Inicio() {
             <div><h2>Um olhar atento</h2><p className="muted small">O que merece a sua próxima decisão</p></div>
             <span className="attention-dot" />
           </div>
-          {abaixo.length ? (
+          {atencao.length ? (
             <div className="attention-list">
-              {abaixo.slice(0, 3).map((p) => (
-                <button key={p.id} onClick={() => editar(p, '/')}>
-                  <span className="product-icon"><Package size={18} /></span>
-                  <span><strong>{p.nome}</strong><small>{pct(avaliacaoDe(p)!.margem)} de margem · meta {pct(p.premissas.meta)}</small></span>
-                  <ArrowUpRight size={18} />
-                </button>
-              ))}
-            </div>
-          ) : revisar.length ? (
-            <div className="attention-list">
-              {revisar.slice(0, 3).map((p) => (
-                <button key={p.id} onClick={() => editar(p, '/')}>
-                  <span className="product-icon"><TriangleAlert size={18} /></span>
-                  <span><strong>{p.nome}</strong><small>{p.calculo?.avisos[0] ?? p.erro ?? 'Confira os custos e as taxas deste produto.'}</small></span>
-                  <ArrowUpRight size={18} />
-                </button>
-              ))}
+              {atencao.slice(0, 4).map((p) => {
+                const situacao = situacaoDoPreco(p)
+                return (
+                  <button key={p.id} onClick={() => editar(p, '/')}>
+                    <span className={`product-icon attention-${situacao}`}>{situacao === 'prejuizo' || situacao === 'revisar' ? <TriangleAlert size={18} /> : <Package size={18} />}</span>
+                    <span><strong>{p.nome} <Selo tom={situacao === 'prejuizo' || situacao === 'revisar' ? 'vermelho' : situacao === 'abaixo' ? 'ambar' : 'neutro'}>{ROTULO_DA_SITUACAO[situacao]}</Selo></strong><small>{motivo(p)}</small></span>
+                    <ArrowUpRight size={18} />
+                  </button>
+                )
+              })}
+              {atencao.length > 4 ? <button className="text-link attention-more" onClick={() => verProdutos(situacaoDoPreco(atencao[0]!))}>Ver todos os {atencao.length} na lista de produtos</button> : null}
             </div>
           ) : (
             <div className="attention-clear">
@@ -167,11 +186,11 @@ export default function Inicio() {
 
       <div className="quick-grid">
         {[
-          { para: '/cenarios', titulo: 'Simule uma mudança', texto: 'Preço, custo ou embalagem.', Icone: Calculator },
-          { para: '/descontos', titulo: 'Encontre seu limite', texto: 'Quanto desconto cabe na margem?', Icone: Percent },
-          { para: '/canais', titulo: 'Compare os canais', texto: 'Veja o que sobra em cada um.', Icone: GitCompareArrows },
+          { para: '/simulacoes', estado: undefined, titulo: 'Simule uma mudança', texto: 'Preço, custo ou embalagem.', Icone: Calculator },
+          { para: '/simulacoes', estado: { abrir: 'promocao' }, titulo: 'Encontre seu limite', texto: 'Quanto desconto cabe na margem?', Icone: Percent },
+          { para: '/canais', estado: undefined, titulo: 'Compare os canais', texto: 'Veja o que sobra em cada um.', Icone: GitCompareArrows },
         ].map((q) => (
-          <button key={q.para} onClick={() => navegar(q.para)}>
+          <button key={q.titulo} onClick={() => navegar(q.para, { state: q.estado })}>
             <q.Icone size={20} />
             <div><strong>{q.titulo}</strong><span>{q.texto}</span></div>
             <ArrowUpRight size={18} />
@@ -180,6 +199,24 @@ export default function Inicio() {
       </div>
     </>
   )
+}
+
+/**
+ * O que mudou numa revisão, em uma frase: o preço cobrado, a margem e o custo
+ * (PLANO-USABILIDADE-LUCRO.md, "próximas"). Só "Revisão 3" não ajudava a
+ * decidir nada; "R$ 34,73 → R$ 29,73 · margem 25% → 29,7%" conta a história.
+ */
+function mudancaDaRevisao(h: Estado['historico'][number]): string {
+  const { antes, depois } = h
+  const preco = (r: ResumoDaRevisao) => (Number(r.preco) > 0 ? brl(r.preco) : 'sem preço')
+  /* sem preço cobrado, a margem guardada é a do sugerido — mostrá-la faria parecer que havia venda */
+  const margem = (r: ResumoDaRevisao) => (r.margem === null || !(Number(r.preco) > 0) ? '—' : pct(r.margem))
+  if (!antes) return `Primeiro preço: ${preco(depois)} · margem ${margem(depois)}`
+  const partes: string[] = []
+  if (antes.preco !== depois.preco) partes.push(`Preço ${preco(antes)} → ${preco(depois)}`)
+  if (antes.custo !== depois.custo) partes.push(`custo ${brl(antes.custo)} → ${brl(depois.custo)}`)
+  if (antes.margem !== depois.margem) partes.push(`margem ${margem(antes)} → ${margem(depois)}`)
+  return partes.length ? partes.join(' · ') : 'Sem mudança de preço, custo ou margem (outros dados do produto)'
 }
 
 export function Relatorios() {
@@ -249,7 +286,8 @@ export function Relatorios() {
               <span className="activity-dot" />
               <div>
                 <strong>{estado.produtos.find((p) => p.id === h.produtoId)?.nome ?? 'Produto'}</strong>
-                <small>Revisão {h.revisao}{h.loteId ? ' · alteração em lote' : ''}</small>
+                <small>{mudancaDaRevisao(h)}</small>
+                <small className="muted">Revisão {h.revisao}{h.loteId ? ' · alteração em lote' : ''}</small>
               </div>
               <time>{data(h.criadoEm)}</time>
             </div>

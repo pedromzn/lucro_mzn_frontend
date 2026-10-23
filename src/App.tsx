@@ -24,6 +24,7 @@ import EsqueciSenha from '@/pages/EsqueciSenha'
 import Vitrine from '@/pages/Vitrine'
 import Inicio, { Relatorios } from '@/pages/Inicio'
 import Produtos from '@/pages/Produtos'
+import ImportarProdutos from '@/pages/ImportarProdutos'
 import Precificar from '@/pages/Precificar'
 import Simular, { CompararCanais } from '@/pages/Simular'
 import Custos from '@/pages/Custos'
@@ -65,10 +66,13 @@ export default function App() {
         <Route path="/esqueci-senha" element={<EsqueciSenha />} />
 
         <Route path="/produtos" element={doApp(<Produtos />)} />
+        <Route path="/produtos/importar" element={doApp(<ImportarProdutos />)} />
         <Route path="/precificar" element={doApp(<Precificar />)} />
         <Route path="/precificar/:id" element={doApp(<Precificar />)} />
-        <Route path="/cenarios" element={doApp(<Simular key="cenarios" modo="cenarios" />)} />
-        <Route path="/descontos" element={doApp(<Simular key="descontos" modo="descontos" />)} />
+        <Route path="/simulacoes" element={doApp(<Simular />)} />
+        {/* Cenários e Descontos viraram Simulações (22/10/2026): o endereço antigo não quebra */}
+        <Route path="/cenarios" element={<Navigate to="/simulacoes" replace />} />
+        <Route path="/descontos" element={<Navigate to="/simulacoes" replace />} />
         <Route path="/canais" element={doApp(<CompararCanais />)} />
         <Route path="/custos" element={doApp(<Custos />)} />
         <Route path="/estoque" element={doApp(<Estoque />)} />

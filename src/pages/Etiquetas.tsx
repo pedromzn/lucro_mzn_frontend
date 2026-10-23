@@ -21,7 +21,8 @@
 import { ImagemDoEspaco } from '@/components/ArquivosDoEspaco'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Check, Download, FileJson, Minus, Plus, Printer, Search, Upload, X } from 'lucide-react'
+import { Check, Download, FileJson, Minus, Plus, Printer, Search, Upload, X, Truck, Tag } from 'lucide-react'
+import EtiquetasDeTransporte from './EtiquetasDeTransporte'
 import {
   ESTILOS_DE_ETIQUETA, MAXIMO_DE_ETIQUETAS, MODELOS_DE_FABRICA, NOMES_DOS_ESTILOS, layoutDeEtiquetaSchema,
   type EstiloDeEtiqueta, type LayoutDeEtiqueta,
@@ -105,6 +106,26 @@ function Passo({ numero, titulo, descricao, feito }: { numero: number; titulo: s
 }
 
 export default function Etiquetas() {
+  const [guia, setGuia] = useState<'loja' | 'transporte'>('loja')
+  return <>
+    <div className="toolbar">
+      <div className="subnav" role="tablist" aria-label="Tipo de etiqueta">
+        {(['loja', 'transporte'] as const).map((id) => <button key={id} type="button" role="tab" id={`guia-etiquetas-${id}`} aria-selected={guia === id} aria-controls={`painel-etiquetas-${id}`} tabIndex={guia === id ? 0 : -1} className={guia === id ? 'active' : ''} onClick={() => setGuia(id)} onKeyDown={(e) => {
+          if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) {
+            e.preventDefault()
+            const proxima = e.key === 'Home' ? 'loja' : e.key === 'End' ? 'transporte' : id === 'loja' ? 'transporte' : 'loja'
+            setGuia(proxima)
+            document.getElementById(`guia-etiquetas-${proxima}`)?.focus()
+          }
+        }}>{id === 'loja' ? <Tag size={16} /> : <Truck size={16} />}{id === 'loja' ? 'Loja' : 'Transporte'}</button>)}
+      </div>
+    </div>
+    <div role="tabpanel" id="painel-etiquetas-loja" aria-labelledby="guia-etiquetas-loja" hidden={guia !== 'loja'}><EtiquetasDaLoja /></div>
+    <div role="tabpanel" id="painel-etiquetas-transporte" aria-labelledby="guia-etiquetas-transporte" hidden={guia !== 'transporte'}><EtiquetasDeTransporte /></div>
+  </>
+}
+
+function EtiquetasDaLoja() {
   const estado = usePainel((s) => s.estado)!
   const iniciais = (useLocation().state as { ids?: string[] } | null)?.ids ?? []
   const [modelos, setModelos] = useState<ModeloDeEtiqueta[]>(DE_FABRICA)

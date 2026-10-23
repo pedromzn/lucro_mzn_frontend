@@ -1,6 +1,6 @@
 /**
  * O resultado do preço — o `ResultPanel` do mock, o mesmo cartão em toda tela
- * que calcula (Precificar, Cenários, Descontos).
+ * que calcula (Precificar e Simulações).
  *
  * O cálculo vem do motor do `@shared/preco`, o MESMO que o servidor roda antes
  * de gravar: o número que a pessoa vê enquanto digita é o que vai ficar.
@@ -38,6 +38,20 @@ export function PainelDoResultado({ calculo, erro, mostrarAtual = false, compact
         <div className="eyebrow">SEU PREÇO, EXPLICADO</div>
         <h2>Vamos encontrar<br />o seu preço.</h2>
         {erro ? <Aviso tipo="erro">{erro}</Aviso> : null}
+      </aside>
+    )
+  }
+  /*
+   * Sem custo nenhum não há preço para sugerir (PLANO-USABILIDADE-LUCRO.md, U4):
+   * a conta dava R$ 0,01, "Meta preservada" e 100% de margem antes de a pessoa
+   * digitar qualquer coisa — um número que parece resposta e não é.
+   */
+  if (Number(calculo.resultado.total) === 0 && !mostrarAtual) {
+    return (
+      <aside className="result-panel">
+        <div className="eyebrow">PREÇO DE VENDA SUGERIDO</div>
+        <h2>Informe o custo<br />para ver o seu preço.</h2>
+        <p className="small muted">No passo “Custos”, diga quanto você paga pelo produto. Embalagem, frete e taxas entram depois — e o preço sugerido aparece aqui, enquanto você digita.</p>
       </aside>
     )
   }

@@ -1,32 +1,18 @@
 /**
  * Os pontos fixos do espaço — PLANO-ESTOQUE-3D.md, fatia 4.
  *
- * Saem das ZONAS da planta, não de coordenadas fixas: a doca fica ao lado do
- * recebimento, a saída ao lado do caixa, e o monte "a guardar" no chão do
- * recebimento — em qualquer tema e com a planta que a pessoa montar.
+ * O recebimento no chão acompanha a zona da planta. Entrada e retirada são
+ * os pontos da rua, compartilhados com a navegação e o caminhão nos três temas.
  */
 
-import { centroDaPosicao, centroDaZona, type Ambiente, type Endereco, type Estrutura, type Zona } from '@shared/enderecos'
+import { centroDaPosicao, centroDaZona, type Ambiente, type Endereco, type Estrutura } from '@shared/enderecos'
 import type { Lugares, Ponto } from './voos'
+import { portaDaRua, retiradaNaRua } from './caminhos'
 
 /** O centro da posição, um pouco acima da superfície — de onde a caixa decola e onde ela pousa. */
 export function centroNoMundo(e: Estrutura, nivel: number, vao: number): Ponto {
   const c = centroDaPosicao(e, nivel, vao)
   return { x: c.x, y: c.y + 0.15, z: c.z }
-}
-
-/** Leva o ponto em direção a uma parede, ficando dentro do espaço. */
-function naParede(p: { x: number; z: number }, ambiente: Pick<Ambiente, 'largura' | 'profundidade'>, lado: 'fundo' | 'frente'): Ponto {
-  const z = lado === 'fundo' ? -ambiente.profundidade / 2 + 0.6 : ambiente.profundidade / 2 - 0.6
-  return { x: Math.max(-ambiente.largura / 2 + 0.8, Math.min(ambiente.largura / 2 - 0.8, p.x)), y: 0.3, z }
-}
-
-const zonaOu = (estruturas: Estrutura[], zonas: Zona[]): { x: number; z: number } | undefined => {
-  for (const z of zonas) {
-    const c = centroDaZona(estruturas, z)
-    if (c) return c
-  }
-  return undefined
 }
 
 /**
@@ -53,7 +39,7 @@ export function lugaresDoEspaco(estruturas: Estrutura[], ambiente: Pick<Ambiente
       return est && e.nivel < est.niveis && e.vao < est.vaos ? centroNoMundo(est, e.nivel, e.vao) : null
     },
     chao: { ...chao, y: 0.3 },
-    entrada: naParede(zonaOu(estruturas, ['recebimento', 'deposito']) ?? { x: 0, z: 0 }, ambiente, 'fundo'),
-    saida: naParede(zonaOu(estruturas, ['expedicao', 'loja']) ?? { x: 0, z: 0 }, ambiente, 'frente'),
+    entrada: portaDaRua(ambiente),
+    saida: retiradaNaRua(ambiente),
   }
 }
